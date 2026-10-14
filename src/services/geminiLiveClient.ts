@@ -126,7 +126,9 @@ export class GeminiLiveClient {
             }
 
             // 2. Native output transcription (Translated Vietnamese target)
+            let hasOutputTranscription = false;
             if (content.outputTranscription?.text) {
+              hasOutputTranscription = true;
               this.callbacks.onOutputTranscription(
                 content.outputTranscription.text,
                 content.outputTranscription.languageCode
@@ -138,8 +140,8 @@ export class GeminiLiveClient {
               for (const part of content.modelTurn.parts) {
                 if (part.inlineData?.data) {
                   this.callbacks.onAudioOutputChunk?.(part.inlineData.data);
-                } else if (part.text) {
-                  // Fallback for non-translate standard models
+                } else if (part.text && !hasOutputTranscription) {
+                  // Fallback for non-translate standard models only when native outputTranscription is missing
                   this.callbacks.onOutputTranscription(part.text);
                 }
               }

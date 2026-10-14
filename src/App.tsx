@@ -185,6 +185,16 @@ export function App() {
     setConnectionState('requesting_permission');
 
     try {
+      // Hàm nối stream chunk thông minh, tránh thừa hoặc thiếu khoảng trắng
+      const appendStreamChunk = (prev: string | undefined, next: string): string => {
+        if (!prev) return next.trimStart();
+        if (!next) return prev;
+        if (/^[\s,.:;!?)]/.test(next) || /[\s(]$/.test(prev)) {
+          return `${prev}${next}`;
+        }
+        return `${prev} ${next}`;
+      };
+
       // 1. Create Gemini 3.5 Live Translate Client
       const geminiClient = new GeminiLiveClient({
         onOpen: () => {
@@ -195,11 +205,11 @@ export function App() {
         },
         onInputTranscription: (text) => {
           // Native source English speech transcript
-          setCurrentInterimEn((prev) => (prev ? `${prev} ${text}` : text));
+          setCurrentInterimEn((prev) => appendStreamChunk(prev, text));
         },
         onOutputTranscription: (text) => {
           // Native translated Vietnamese transcript
-          setCurrentInterimVi((prev) => (prev ? `${prev} ${text}` : text));
+          setCurrentInterimVi((prev) => appendStreamChunk(prev, text));
         },
         onTurnComplete: () => {
           handleTurnComplete();

@@ -99,7 +99,8 @@ export class AudioStreamer {
 
       this.startVolumeMonitoring();
 
-      const bufferSize = 4096;
+      // Use 2048 sample buffer for lower latency streaming (~128ms at 16kHz)
+      const bufferSize = 2048;
       this.scriptProcessor = this.audioContext.createScriptProcessor(bufferSize, 1, 1);
 
       this.scriptProcessor.onaudioprocess = (event) => {

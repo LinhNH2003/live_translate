@@ -12,6 +12,7 @@ import {
   Clock
 } from 'lucide-react';
 import type { TranslationSegment, SubtitleViewMode, FontSizeOption } from '../types';
+import { useSmoothText } from '../hooks/useSmoothText';
 
 interface SubtitleWorkspaceProps {
   segments: TranslationSegment[];
@@ -52,12 +53,16 @@ export const SubtitleWorkspace: React.FC<SubtitleWorkspaceProps> = ({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [copiedAll, setCopiedAll] = useState(false);
 
+  // Hiệu ứng làm mượt dòng chữ streaming thời gian thực
+  const smoothVi = useSmoothText(currentInterimText, 25);
+  const smoothEn = useSmoothText(currentInterimEn || '', 25);
+
   // Auto-scroll when new segment or interim arrives
   useEffect(() => {
     if (autoScroll && !isScrolledUp && bottomAnchorRef.current) {
       bottomAnchorRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [segments, currentInterimText, autoScroll, isScrolledUp]);
+  }, [segments, smoothVi, autoScroll, isScrolledUp]);
 
   // Detect manual scroll
   const handleScroll = () => {
@@ -365,10 +370,10 @@ export const SubtitleWorkspace: React.FC<SubtitleWorkspaceProps> = ({
                 </span>
               </div>
 
-              {viewMode === 'bilingual' && currentInterimEn && (
+              {viewMode === 'bilingual' && (currentInterimEn || smoothEn) && (
                 <div className="text-sm sm:text-base font-normal text-slate-400 mb-2 border-b border-indigo-900/40 pb-2">
                   <span className="text-slate-400 font-semibold mr-1.5 uppercase text-xs">EN:</span>
-                  <span className="italic">{currentInterimEn}</span>
+                  <span className="italic">{smoothEn}</span>
                 </div>
               )}
 
@@ -378,9 +383,9 @@ export const SubtitleWorkspace: React.FC<SubtitleWorkspaceProps> = ({
                 {viewMode === 'bilingual' && (
                   <span className="text-indigo-400 font-bold mr-2 uppercase text-xs inline-block align-middle">VI:</span>
                 )}
-                {currentInterimText ? (
+                {smoothVi ? (
                   <>
-                    <span className="live-shimmer-text">{currentInterimText}</span>
+                    <span className="live-shimmer-text">{smoothVi}</span>
                     <span className="inline-block w-2.5 h-6 ml-1 bg-indigo-400 animate-pulse align-middle rounded-sm"></span>
                   </>
                 ) : (
