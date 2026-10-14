@@ -57,21 +57,38 @@ export class GeminiLiveClient {
       this.ws.onopen = () => {
         this.callbacks.onOpen();
 
-        // Gemini 3.5 Live Translate native configuration as specified in Google docs
-        const setupMessage = {
+        // Gemini Live setup message configuration
+        const isTranslateModel = formattedModel.includes('live-translate');
+
+        const generationConfig: Record<string, any> = {
+          responseModalities: ['AUDIO'],
+        };
+
+        if (isTranslateModel) {
+          generationConfig.translationConfig = {
+            targetLanguageCode: targetLang,
+            echoTargetLanguage: echoTarget,
+          };
+        }
+
+        const setupMessage: Record<string, any> = {
           setup: {
             model: formattedModel,
-            generationConfig: {
-              responseModalities: ['AUDIO'],
-              inputAudioTranscription: {},
-              outputAudioTranscription: {},
-              translationConfig: {
-                targetLanguageCode: targetLang,
-                echoTargetLanguage: echoTarget,
-              },
-            },
+            generationConfig,
+            inputAudioTranscription: {},
+            outputAudioTranscription: {},
           },
         };
+
+        if (!isTranslateModel) {
+          setupMessage.setup.systemInstruction = {
+            parts: [
+              {
+                text: `You are a real-time speech translator. Listen to the user's speech and translate it immediately into target language: ${targetLang}. Only output the translated speech and text. Do not reply or converse.`,
+              },
+            ],
+          };
+        }
 
         this.ws?.send(JSON.stringify(setupMessage));
         resolve();
