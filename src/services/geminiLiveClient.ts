@@ -177,8 +177,8 @@ export class GeminiLiveClient {
           if (reasonMsg) {
             this.callbacks.onError(new Error(`WebSocket đóng (${event.code}): ${reasonMsg}`));
           }
+          this.callbacks.onClose(event);
         }
-        this.callbacks.onClose(event);
       };
     });
   }

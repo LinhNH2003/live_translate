@@ -68,6 +68,11 @@ export function App() {
   // Buffer accumulator for streaming text deltas
   const textBufferRef = useRef<string>('');
 
+  // Đồng bộ tức thì giá trị interim để chống race condition và dup segments trong React
+  const interimViRef = useRef<string>('');
+  const interimEnRef = useRef<string>('');
+  const isStoppingRef = useRef<boolean>(false);
+
   // Enumerate audio devices on mount
   useEffect(() => {
     getAvailableAudioDevices().then((devices) => {
@@ -112,65 +117,96 @@ export function App() {
       const viMatch = fullBuffer.match(/\[VI\]\s*([^[]*?)(?=\[EN\]|$)/i);
 
       if (enMatch && enMatch[1]) {
-        setCurrentInterimEn(enMatch[1].trim());
+        const enVal = enMatch[1].trim();
+        interimEnRef.current = enVal;
+        setCurrentInterimEn(enVal);
       }
       if (viMatch && viMatch[1]) {
-        setCurrentInterimVi(viMatch[1].trim());
+        const viVal = viMatch[1].trim();
+        interimViRef.current = viVal;
+        setCurrentInterimVi(viVal);
       } else if (!viMatch && enMatch) {
+        interimViRef.current = '...';
         setCurrentInterimVi('...');
       }
     } else {
       // Direct Vietnamese translation mode
-      setCurrentInterimVi(fullBuffer.trim());
+      const viVal = fullBuffer.trim();
+      interimViRef.current = viVal;
+      setCurrentInterimVi(viVal);
     }
   }, []);
 
   // Commit completed turn to segments history
   const handleTurnComplete = useCallback(() => {
-    setCurrentInterimVi((vi) => {
-      const finalVi = vi.trim();
-      if (finalVi) {
-        setCurrentInterimEn((en) => {
-          const finalEn = en?.trim();
-          setSegments((prev) => [
-            ...prev,
-            {
-              id: `seg_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-              timestamp: Date.now(),
-              originalEn: finalEn,
-              translatedVi: finalVi,
-              isPartial: false,
-            },
-          ]);
-          return undefined;
-        });
-      }
-      return '';
-    });
+    const finalVi = interimViRef.current.trim();
+    const finalEn = interimEnRef.current.trim();
+
+    // Reset synchronous buffer ngay lập tức để bất kỳ lệnh gọi kế tiếp nào đều nhận giá trị rỗng
+    interimViRef.current = '';
+    interimEnRef.current = '';
+    setCurrentInterimVi('');
+    setCurrentInterimEn(undefined);
     textBufferRef.current = '';
+
+    // Nếu không có nội dung chữ nào thì thoát ngay lập tức, không lưu segment rỗng
+    if (!finalVi && !finalEn) return;
+
+    setSegments((prev) => {
+      // Dedup guard: Kiểm tra trùng lặp tuyệt đối với segment vừa ghi trước đó
+      const lastSeg = prev[prev.length - 1];
+      if (
+        lastSeg &&
+        lastSeg.translatedVi === finalVi &&
+        (!finalEn || lastSeg.originalEn === finalEn)
+      ) {
+        return prev;
+      }
+
+      return [
+        ...prev,
+        {
+          id: `seg_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          timestamp: Date.now(),
+          originalEn: finalEn || undefined,
+          translatedVi: finalVi,
+          isPartial: false,
+        },
+      ];
+    });
   }, []);
 
   // Stop everything
   const handleStop = useCallback(() => {
-    if (demoSimulatorRef.current) {
-      demoSimulatorRef.current.stop();
-      demoSimulatorRef.current = null;
-    }
-    if (audioStreamerRef.current) {
-      audioStreamerRef.current.stop();
-      audioStreamerRef.current = null;
-    }
-    if (geminiClientRef.current) {
-      geminiClientRef.current.disconnect();
-      geminiClientRef.current = null;
-    }
+    // Ngăn chặn gọi lại handleStop nếu đang trong quá trình dừng
+    if (isStoppingRef.current) return;
+    isStoppingRef.current = true;
 
-    handleTurnComplete();
+    try {
+      if (demoSimulatorRef.current) {
+        demoSimulatorRef.current.stop();
+        demoSimulatorRef.current = null;
+      }
+      if (audioStreamerRef.current) {
+        audioStreamerRef.current.stop();
+        audioStreamerRef.current = null;
+      }
+      if (geminiClientRef.current) {
+        geminiClientRef.current.disconnect();
+        geminiClientRef.current = null;
+      }
 
-    setConnectionState('idle');
-    setIsPaused(false);
-    setIsDemoMode(false);
-    setAudioVolume(0);
+      handleTurnComplete();
+
+      setConnectionState('idle');
+      setIsPaused(false);
+      setIsDemoMode(false);
+      setAudioVolume(0);
+    } finally {
+      setTimeout(() => {
+        isStoppingRef.current = false;
+      }, 300);
+    }
   }, [handleTurnComplete]);
 
   // Start Real Gemini Live translation
@@ -205,11 +241,15 @@ export function App() {
         },
         onInputTranscription: (text) => {
           // Native source English speech transcript
-          setCurrentInterimEn((prev) => appendStreamChunk(prev, text));
+          const updated = appendStreamChunk(interimEnRef.current, text);
+          interimEnRef.current = updated;
+          setCurrentInterimEn(updated);
         },
         onOutputTranscription: (text) => {
           // Native translated Vietnamese transcript
-          setCurrentInterimVi((prev) => appendStreamChunk(prev, text));
+          const updated = appendStreamChunk(interimViRef.current, text);
+          interimViRef.current = updated;
+          setCurrentInterimVi(updated);
         },
         onTurnComplete: () => {
           handleTurnComplete();
@@ -328,6 +368,8 @@ export function App() {
 
   const handleClearSegments = () => {
     setSegments([]);
+    interimViRef.current = '';
+    interimEnRef.current = '';
     setCurrentInterimVi('');
     setCurrentInterimEn(undefined);
     textBufferRef.current = '';
