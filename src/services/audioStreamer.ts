@@ -169,27 +169,32 @@ export class AudioStreamer {
     if (!this.analyser) return;
 
     const dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+    let lastReportTime = 0;
 
-    const checkVolume = () => {
+    const checkVolume = (timestamp: number) => {
       if (!this.analyser || !this.isStreaming) {
         this.callbacks.onVolumeChange(0);
         return;
       }
 
-      this.analyser.getByteFrequencyData(dataArray);
+      // Throttling to ~20 FPS (50ms interval) để tránh ép React re-render 60-144 lần/giây
+      if (timestamp - lastReportTime >= 50) {
+        lastReportTime = timestamp;
+        this.analyser.getByteFrequencyData(dataArray);
 
-      let sum = 0;
-      for (let i = 0; i < dataArray.length; i++) {
-        sum += dataArray[i];
+        let sum = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+          sum += dataArray[i];
+        }
+        const average = sum / dataArray.length;
+        const normalized = Math.min(1, Math.max(0, average / 128));
+        this.callbacks.onVolumeChange(normalized);
       }
-      const average = sum / dataArray.length;
-      const normalized = Math.min(1, Math.max(0, average / 128));
-      this.callbacks.onVolumeChange(normalized);
 
       this.animFrameId = requestAnimationFrame(checkVolume);
     };
 
-    checkVolume();
+    this.animFrameId = requestAnimationFrame(checkVolume);
   }
 
   private floatToInt16(float32Array: Float32Array): Int16Array {

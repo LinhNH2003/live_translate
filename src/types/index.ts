@@ -36,6 +36,7 @@ export interface AppSettings {
   theme: 'dark' | 'light';
   showTimestamps: boolean;
   highContrast: boolean;
+  filterFillerWords: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -54,6 +55,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'dark',
   showTimestamps: true,
   highContrast: false,
+  filterFillerWords: true,
 };
 
 export interface AudioDeviceOption {

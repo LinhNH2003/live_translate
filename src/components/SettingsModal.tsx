@@ -40,6 +40,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [lineHeight, setLineHeight] = useState(settings.lineHeight);
   const [maxWidth, setMaxWidth] = useState(settings.maxWidth);
   const [showTimestamps, setShowTimestamps] = useState(settings.showTimestamps);
+  const [filterFillerWords, setFilterFillerWords] = useState(settings.filterFillerWords ?? true);
   const [selectedDeviceId, setSelectedDeviceId] = useState(settings.selectedAudioDeviceId);
 
   if (!isOpen) return null;
@@ -91,6 +92,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       lineHeight,
       maxWidth,
       showTimestamps,
+      filterFillerWords,
       selectedAudioDeviceId: selectedDeviceId,
     });
     onClose();
@@ -431,7 +433,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 type="checkbox"
                 checked={showTimestamps}
                 onChange={(e) => setShowTimestamps(e.target.checked)}
-                className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
+                className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+              />
+            </div>
+
+            {/* Smart Filler Filter toggle */}
+            <div className="flex items-center justify-between p-3 rounded-2xl bg-gradient-to-r from-indigo-950/40 to-purple-950/30 border border-indigo-500/30">
+              <div>
+                <span className="text-xs font-semibold text-indigo-200 block flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Lọc từ đệm & tiếng ậm ừ (Smart Filler Filter)</span>
+                </span>
+                <span className="text-[11px] text-slate-400">
+                  Tự động loại bỏ tiếng ngập ngừng ("um, uh, er, ah, ừm, ờ...") giúp phụ đề sạch sẽ, không ghi turn rác
+                </span>
+              </div>
+              <input
+                type="checkbox"
+                checked={filterFillerWords}
+                onChange={(e) => setFilterFillerWords(e.target.checked)}
+                className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
               />
             </div>
           </div>

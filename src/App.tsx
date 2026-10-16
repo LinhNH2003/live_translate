@@ -15,6 +15,7 @@ import { SubtitleWorkspace } from './components/SubtitleWorkspace';
 import { BottomDock } from './components/BottomDock';
 import { SettingsModal } from './components/SettingsModal';
 import { AlertCircle, Key, PlayCircle, X } from 'lucide-react';
+import { isPureFillerText, cleanFillerWords } from './utils/textFilter';
 
 const STORAGE_KEY = 'lingua_live_settings_v2';
 
@@ -29,7 +30,7 @@ export function App() {
     }
   });
 
-  const saveSettings = (updated: Partial<AppSettings>) => {
+  const saveSettings = useCallback((updated: Partial<AppSettings>) => {
     setSettings((prev) => {
       const next = { ...prev, ...updated };
       try {
@@ -39,7 +40,7 @@ export function App() {
       }
       return next;
     });
-  };
+  }, []);
 
   // --- UI States ---
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -139,8 +140,8 @@ export function App() {
 
   // Commit completed turn to segments history
   const handleTurnComplete = useCallback(() => {
-    const finalVi = interimViRef.current.trim();
-    const finalEn = interimEnRef.current.trim();
+    const rawVi = interimViRef.current.trim();
+    const rawEn = interimEnRef.current.trim();
 
     // Reset synchronous buffer ngay lập tức để bất kỳ lệnh gọi kế tiếp nào đều nhận giá trị rỗng
     interimViRef.current = '';
@@ -150,6 +151,22 @@ export function App() {
     textBufferRef.current = '';
 
     // Nếu không có nội dung chữ nào thì thoát ngay lập tức, không lưu segment rỗng
+    if (!rawVi && !rawEn) return;
+
+    // Bộ lọc từ đệm thông minh: Nếu bật filterFillerWords và turn chỉ toàn tiếng ngập ngừng/ậm ừ -> bỏ qua
+    if (settings.filterFillerWords) {
+      const isViFiller = isPureFillerText(rawVi);
+      const isEnFiller = !rawEn || isPureFillerText(rawEn);
+
+      if (isViFiller && isEnFiller) {
+        return;
+      }
+    }
+
+    // Khử từ đệm đứng đầu câu nếu có
+    const finalVi = settings.filterFillerWords ? cleanFillerWords(rawVi) : rawVi;
+    const finalEn = settings.filterFillerWords && rawEn ? cleanFillerWords(rawEn) : rawEn;
+
     if (!finalVi && !finalEn) return;
 
     setSegments((prev) => {
@@ -174,7 +191,7 @@ export function App() {
         },
       ];
     });
-  }, []);
+  }, [settings.filterFillerWords]);
 
   // Stop everything
   const handleStop = useCallback(() => {
@@ -265,12 +282,14 @@ export function App() {
       });
       geminiClientRef.current = geminiClient;
 
-      // 2. Connect WebSocket with translationConfig
+      // 2. Connect WebSocket with translationConfig & sliding window compression
       await geminiClient.connect({
         apiKey: settings.apiKey,
         model: settings.model || 'models/gemini-3.5-live-translate-preview',
         targetLanguageCode: settings.targetLanguageCode || 'vi',
         echoTargetLanguage: settings.echoTargetLanguage !== false,
+        filterFillerWords: settings.filterFillerWords !== false,
+        playAudioOutput: settings.playAudioOutput === true,
       });
 
       // 3. Start Audio Streamer
@@ -366,14 +385,54 @@ export function App() {
     }
   };
 
-  const handleClearSegments = () => {
+  const handleClearSegments = useCallback(() => {
     setSegments([]);
     interimViRef.current = '';
     interimEnRef.current = '';
     setCurrentInterimVi('');
     setCurrentInterimEn(undefined);
     textBufferRef.current = '';
-  };
+  }, []);
+
+  const handleViewModeChange = useCallback((mode: any) => {
+    saveSettings({ viewMode: mode });
+  }, [saveSettings]);
+
+  const handleFontSizeChange = useCallback((size: any) => {
+    saveSettings({ fontSize: size });
+  }, [saveSettings]);
+
+  const handleAutoScrollToggle = useCallback(() => {
+    setSettings((prev) => {
+      const next = { ...prev, autoScroll: !prev.autoScroll };
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      } catch (e) {
+        console.warn('Failed to save settings:', e);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleAudioSourceTypeChange = useCallback((type: any) => {
+    saveSettings({ audioSourceType: type });
+  }, [saveSettings]);
+
+  const handleSelectDevice = useCallback((deviceId: string) => {
+    saveSettings({ selectedAudioDeviceId: deviceId });
+  }, [saveSettings]);
+
+  const handleToggleTheme = useCallback(() => {
+    saveSettings({ theme: settings.theme === 'dark' ? 'light' : 'dark' });
+  }, [saveSettings, settings.theme]);
+
+  const handleOpenSettings = useCallback(() => {
+    setIsSettingsOpen(true);
+  }, []);
+
+  const handleCloseSettings = useCallback(() => {
+    setIsSettingsOpen(false);
+  }, []);
 
   return (
     <div className="min-h-screen flex flex-col bg-[#0b0f19] text-slate-100 transition-colors selection:bg-indigo-500/30">
@@ -385,9 +444,9 @@ export function App() {
         audioVolume={audioVolume}
         isDemoMode={isDemoMode}
         onToggleDemoMode={handleToggleDemoMode}
-        onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenSettings={handleOpenSettings}
         theme={settings.theme}
-        onToggleTheme={() => saveSettings({ theme: settings.theme === 'dark' ? 'light' : 'dark' })}
+        onToggleTheme={handleToggleTheme}
         errorMessage={errorMessage || undefined}
       />
 
@@ -468,13 +527,13 @@ export function App() {
         currentInterimText={currentInterimVi}
         currentInterimEn={currentInterimEn}
         viewMode={settings.viewMode}
-        onViewModeChange={(mode) => saveSettings({ viewMode: mode })}
+        onViewModeChange={handleViewModeChange}
         fontSize={settings.fontSize}
-        onFontSizeChange={(size) => saveSettings({ fontSize: size })}
+        onFontSizeChange={handleFontSizeChange}
         lineHeight={settings.lineHeight}
         maxWidth={settings.maxWidth}
         autoScroll={settings.autoScroll}
-        onAutoScrollToggle={() => saveSettings({ autoScroll: !settings.autoScroll })}
+        onAutoScrollToggle={handleAutoScrollToggle}
         showTimestamps={settings.showTimestamps}
         isTranslating={connectionState === 'listening'}
         onClearSegments={handleClearSegments}
@@ -487,16 +546,16 @@ export function App() {
         onToggleStartStop={handleToggleStartStop}
         onTogglePause={handleTogglePause}
         audioSourceType={settings.audioSourceType}
-        onAudioSourceTypeChange={(type) => saveSettings({ audioSourceType: type })}
+        onAudioSourceTypeChange={handleAudioSourceTypeChange}
         availableDevices={availableDevices}
         selectedDeviceId={settings.selectedAudioDeviceId}
-        onSelectDevice={(deviceId) => saveSettings({ selectedAudioDeviceId: deviceId })}
+        onSelectDevice={handleSelectDevice}
       />
 
       {/* Settings Modal */}
       <SettingsModal
         isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
+        onClose={handleCloseSettings}
         settings={settings}
         onSaveSettings={saveSettings}
         availableDevices={availableDevices}

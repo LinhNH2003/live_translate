@@ -24,7 +24,7 @@ interface HeaderProps {
   errorMessage?: string;
 }
 
-export const Header: React.FC<HeaderProps> = ({
+const HeaderComponent: React.FC<HeaderProps> = ({
   connectionState,
   sessionDuration,
   audioVolume,
@@ -202,3 +202,5 @@ export const Header: React.FC<HeaderProps> = ({
     </header>
   );
 };
+
+export const Header = React.memo(HeaderComponent);

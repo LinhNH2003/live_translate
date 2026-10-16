@@ -14,6 +14,8 @@ export interface GeminiLiveConfig {
   model?: string;
   targetLanguageCode?: string; // 'vi'
   echoTargetLanguage?: boolean;
+  filterFillerWords?: boolean;
+  playAudioOutput?: boolean;
 }
 
 export class GeminiLiveClient {
@@ -61,7 +63,7 @@ export class GeminiLiveClient {
         const isTranslateModel = formattedModel.includes('live-translate');
 
         const generationConfig: Record<string, any> = {
-          responseModalities: ['AUDIO'],
+          responseModalities: isTranslateModel || config.playAudioOutput ? ['AUDIO'] : ['TEXT'],
         };
 
         if (isTranslateModel) {
@@ -71,24 +73,29 @@ export class GeminiLiveClient {
           };
         }
 
+        const systemPrompt = config.filterFillerWords !== false
+          ? `You are an expert simultaneous conference interpreter. Listen to the user's speech and translate it immediately into target language: ${targetLang}. Crucial instruction: Filter out verbal fillers, hesitations, repetitive stutters, and non-lexical vocalizations (e.g. 'um', 'uh', 'er', 'ah', 'like', 'you know', 'ừm', 'ờ', 'à'). Translate only the clear, meaningful semantic content. Do not chat or converse.`
+          : `You are a real-time speech translator. Listen to the user's speech and translate it immediately into target language: ${targetLang}. Only output the translated speech and text. Do not reply or converse.`;
+
         const setupMessage: Record<string, any> = {
           setup: {
             model: formattedModel,
             generationConfig,
+            systemInstruction: {
+              parts: [{ text: systemPrompt }],
+            },
+            // Context Window Compression: Ngăn chặn phình ngữ cảnh (context bloat) và duy trì độ trễ thấp (<400ms)
+            // khi cuộc hội thoại kéo dài > 5 phút.
+            contextWindowCompression: {
+              triggerTokens: 10000,
+              slidingWindow: {
+                targetTokens: 5000,
+              },
+            },
             inputAudioTranscription: {},
             outputAudioTranscription: {},
           },
         };
-
-        if (!isTranslateModel) {
-          setupMessage.setup.systemInstruction = {
-            parts: [
-              {
-                text: `You are a real-time speech translator. Listen to the user's speech and translate it immediately into target language: ${targetLang}. Only output the translated speech and text. Do not reply or converse.`,
-              },
-            ],
-          };
-        }
 
         this.ws?.send(JSON.stringify(setupMessage));
         resolve();

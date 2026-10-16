@@ -22,7 +22,7 @@ interface BottomDockProps {
   onSelectDevice: (deviceId: string) => void;
 }
 
-export const BottomDock: React.FC<BottomDockProps> = ({
+const BottomDockComponent: React.FC<BottomDockProps> = ({
   connectionState,
   isPaused,
   onToggleStartStop,
@@ -152,3 +152,5 @@ export const BottomDock: React.FC<BottomDockProps> = ({
     </footer>
   );
 };
+
+export const BottomDock = React.memo(BottomDockComponent);

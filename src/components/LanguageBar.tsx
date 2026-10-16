@@ -7,7 +7,7 @@ interface LanguageBarProps {
   isActive: boolean;
 }
 
-export const LanguageBar: React.FC<LanguageBarProps> = ({
+const LanguageBarComponent: React.FC<LanguageBarProps> = ({
   audioSourceType,
   isActive,
 }) => {
@@ -84,3 +84,5 @@ export const LanguageBar: React.FC<LanguageBarProps> = ({
     </div>
   );
 };
+
+export const LanguageBar = React.memo(LanguageBarComponent);

@@ -31,7 +31,70 @@ interface SubtitleWorkspaceProps {
   onClearSegments: () => void;
 }
 
-export const SubtitleWorkspace: React.FC<SubtitleWorkspaceProps> = ({
+interface SubtitleItemProps {
+  seg: TranslationSegment;
+  viewMode: SubtitleViewMode;
+  showTimestamps: boolean;
+  copied: boolean;
+  fontSizeClass: string;
+  lineHeightClass: string;
+  onCopy: (id: string, text: string) => void;
+}
+
+const SubtitleItem = React.memo<SubtitleItemProps>(({
+  seg,
+  viewMode,
+  showTimestamps,
+  copied,
+  fontSizeClass,
+  lineHeightClass,
+  onCopy,
+}) => {
+  return (
+    <div className="group relative p-4 sm:p-5 rounded-2xl bg-slate-900/70 border border-slate-800/80 hover:border-indigo-500/30 transition-all shadow-md">
+      <div className="flex items-center justify-between mb-2 text-xs text-slate-400">
+        {showTimestamps && (
+          <span className="flex items-center gap-1 font-mono">
+            <Clock className="w-3 h-3 text-slate-400" />
+            {new Date(seg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+          </span>
+        )}
+        <div className="opacity-0 group-hover:opacity-100 transition-opacity ml-auto">
+          <button
+            type="button"
+            onClick={() => onCopy(seg.id, seg.translatedVi)}
+            className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-800 transition-colors"
+            title="Sao chép câu này"
+          >
+            {copied ? (
+              <Check className="w-3.5 h-3.5 text-emerald-400" />
+            ) : (
+              <Copy className="w-3.5 h-3.5" />
+            )}
+          </button>
+        </div>
+      </div>
+
+      {viewMode === 'bilingual' && seg.originalEn && (
+        <div className="text-sm sm:text-base font-normal text-slate-400 mb-2 border-b border-slate-800/60 pb-2">
+          <span className="text-slate-400 font-semibold mr-1.5 uppercase text-xs">EN:</span>
+          <span className="italic">{seg.originalEn}</span>
+        </div>
+      )}
+
+      <div
+        className={`font-semibold tracking-tight text-white ${fontSizeClass} ${lineHeightClass}`}
+      >
+        {viewMode === 'bilingual' && (
+          <span className="text-indigo-400 font-bold mr-2 uppercase text-xs inline-block align-middle">VI:</span>
+        )}
+        <span>{seg.translatedVi}</span>
+      </div>
+    </div>
+  );
+});
+
+const SubtitleWorkspaceComponent: React.FC<SubtitleWorkspaceProps> = ({
   segments,
   currentInterimText,
   currentInterimEn,
@@ -57,12 +120,32 @@ export const SubtitleWorkspace: React.FC<SubtitleWorkspaceProps> = ({
   const smoothVi = useSmoothText(currentInterimText, 25);
   const smoothEn = useSmoothText(currentInterimEn || '', 25);
 
-  // Auto-scroll when new segment or interim arrives
+  const scrollRafRef = useRef<number | null>(null);
+
+  // Auto-scroll tối ưu:
+  // 1. Khi có segment mới hoàn thành -> Cuộn mượt (smooth scroll)
   useEffect(() => {
     if (autoScroll && !isScrolledUp && bottomAnchorRef.current) {
       bottomAnchorRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [segments, smoothVi, autoScroll, isScrolledUp]);
+  }, [segments.length, autoScroll, isScrolledUp]);
+
+  // 2. Khi đang gõ chữ streaming -> Dùng instant scroll qua requestAnimationFrame,
+  // tuyệt đối không gọi scrollIntoView({ behavior: 'smooth' }) liên tục mỗi 25ms gây gián đoạn và layout thrashing
+  useEffect(() => {
+    if (!autoScroll || isScrolledUp || !containerRef.current) return;
+    if (scrollRafRef.current) cancelAnimationFrame(scrollRafRef.current);
+
+    scrollRafRef.current = requestAnimationFrame(() => {
+      if (containerRef.current) {
+        containerRef.current.scrollTop = containerRef.current.scrollHeight;
+      }
+    });
+
+    return () => {
+      if (scrollRafRef.current) cancelAnimationFrame(scrollRafRef.current);
+    };
+  }, [smoothVi, autoScroll, isScrolledUp]);
 
   // Detect manual scroll
   const handleScroll = () => {
@@ -311,50 +394,17 @@ export const SubtitleWorkspace: React.FC<SubtitleWorkspaceProps> = ({
           )}
 
           {/* History Segments */}
-          {segments.map((seg, index) => (
-            <div
-              key={seg.id || index}
-              className="group relative p-4 sm:p-5 rounded-2xl bg-slate-900/70 border border-slate-800/80 hover:border-indigo-500/30 transition-all shadow-md"
-            >
-              <div className="flex items-center justify-between mb-2 text-xs text-slate-400">
-                {showTimestamps && (
-                  <span className="flex items-center gap-1 font-mono">
-                    <Clock className="w-3 h-3 text-slate-400" />
-                    {new Date(seg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                  </span>
-                )}
-                <div className="opacity-0 group-hover:opacity-100 transition-opacity ml-auto">
-                  <button
-                    type="button"
-                    onClick={() => handleCopySegment(seg.id, seg.translatedVi)}
-                    className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-800 transition-colors"
-                    title="Sao chép câu này"
-                  >
-                    {copiedId === seg.id ? (
-                      <Check className="w-3.5 h-3.5 text-emerald-400" />
-                    ) : (
-                      <Copy className="w-3.5 h-3.5" />
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              {viewMode === 'bilingual' && seg.originalEn && (
-                <div className="text-sm sm:text-base font-normal text-slate-400 mb-2 border-b border-slate-800/60 pb-2">
-                  <span className="text-slate-400 font-semibold mr-1.5 uppercase text-xs">EN:</span>
-                  <span className="italic">{seg.originalEn}</span>
-                </div>
-              )}
-
-              <div
-                className={`font-semibold tracking-tight text-white ${getFontSizeClass()} ${getLineHeightClass()}`}
-              >
-                {viewMode === 'bilingual' && (
-                  <span className="text-indigo-400 font-bold mr-2 uppercase text-xs inline-block align-middle">VI:</span>
-                )}
-                <span>{seg.translatedVi}</span>
-              </div>
-            </div>
+          {segments.map((seg) => (
+            <SubtitleItem
+              key={seg.id}
+              seg={seg}
+              viewMode={viewMode}
+              showTimestamps={showTimestamps}
+              copied={copiedId === seg.id}
+              fontSizeClass={getFontSizeClass()}
+              lineHeightClass={getLineHeightClass()}
+              onCopy={handleCopySegment}
+            />
           ))}
 
           {/* Currently Streaming Interim Segment */}
@@ -416,3 +466,5 @@ export const SubtitleWorkspace: React.FC<SubtitleWorkspaceProps> = ({
     </main>
   );
 };
+
+export const SubtitleWorkspace = React.memo(SubtitleWorkspaceComponent);
