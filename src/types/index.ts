@@ -2,6 +2,7 @@ export type ConnectionState =
   | 'idle' 
   | 'requesting_permission' 
   | 'connecting' 
+  | 'reconnecting'
   | 'listening' 
   | 'paused' 
   | 'error';
@@ -18,7 +19,11 @@ export interface TranslationSegment {
   originalEn?: string;
   translatedVi: string;
   isPartial?: boolean;
+  isPauseMarker?: boolean;
+  pauseDurationSec?: number;
 }
+
+export type NoiseSuppressionLevel = 'off' | 'low' | 'medium' | 'high';
 
 export interface AppSettings {
   apiKey: string;
@@ -37,6 +42,11 @@ export interface AppSettings {
   showTimestamps: boolean;
   highContrast: boolean;
   filterFillerWords: boolean;
+  customGlossary: string;
+  noiseSuppressionLevel: NoiseSuppressionLevel;
+  enableVoiceCompressor: boolean;
+  enableSpeechClarityBoost: boolean;
+  enableSileroVAD: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -56,6 +66,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
   showTimestamps: true,
   highContrast: false,
   filterFillerWords: true,
+  customGlossary: '',
+  noiseSuppressionLevel: 'medium',
+  enableVoiceCompressor: true,
+  enableSpeechClarityBoost: true,
+  enableSileroVAD: true,
 };
 
 export interface AudioDeviceOption {

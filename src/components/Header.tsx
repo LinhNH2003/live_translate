@@ -16,6 +16,7 @@ interface HeaderProps {
   connectionState: ConnectionState;
   sessionDuration: number;
   audioVolume: number;
+  isUserSpeaking?: boolean;
   isDemoMode: boolean;
   onToggleDemoMode: () => void;
   onOpenSettings: () => void;
@@ -28,6 +29,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
   connectionState,
   sessionDuration,
   audioVolume,
+  isUserSpeaking = false,
   isDemoMode,
   onToggleDemoMode,
   onOpenSettings,
@@ -62,12 +64,16 @@ const HeaderComponent: React.FC<HeaderProps> = ({
     switch (connectionState) {
       case 'listening':
         return (
-          <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-medium">
+          <div className={`flex items-center gap-2 px-3 py-1 rounded-full border text-xs font-medium transition-all ${
+            isUserSpeaking
+              ? 'bg-emerald-500/25 border-emerald-400 text-emerald-300 ring-1 ring-emerald-400/50 shadow-sm shadow-emerald-500/20'
+              : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+          }`}>
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
             </span>
-            <span>Đang nghe & dịch</span>
+            <span>{isUserSpeaking ? 'Đang nói (Silero VAD)' : 'Đang nghe & dịch'}</span>
           </div>
         );
       case 'connecting':
@@ -75,6 +81,13 @@ const HeaderComponent: React.FC<HeaderProps> = ({
           <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/15 border border-indigo-500/30 text-indigo-400 text-xs font-medium">
             <Radio className="w-3.5 h-3.5 animate-pulse" />
             <span>Đang kết nối Gemini...</span>
+          </div>
+        );
+      case 'reconnecting':
+        return (
+          <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-medium animate-pulse">
+            <Radio className="w-3.5 h-3.5 animate-spin" />
+            <span>Tự động kết nối lại...</span>
           </div>
         );
       case 'requesting_permission':

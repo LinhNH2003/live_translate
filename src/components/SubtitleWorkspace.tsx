@@ -393,19 +393,43 @@ const SubtitleWorkspaceComponent: React.FC<SubtitleWorkspaceProps> = ({
             </div>
           )}
 
+          {/* Capped window notice */}
+          {segments.length > 50 && (
+            <div className="flex items-center justify-center mb-2">
+              <span className="px-3 py-1 text-xs text-slate-400 bg-slate-900/60 rounded-full border border-slate-800">
+                Đang hiển thị {segments.length} câu mới nhất để tối ưu hiệu năng
+              </span>
+            </div>
+          )}
+
           {/* History Segments */}
-          {segments.map((seg) => (
-            <SubtitleItem
-              key={seg.id}
-              seg={seg}
-              viewMode={viewMode}
-              showTimestamps={showTimestamps}
-              copied={copiedId === seg.id}
-              fontSizeClass={getFontSizeClass()}
-              lineHeightClass={getLineHeightClass()}
-              onCopy={handleCopySegment}
-            />
-          ))}
+          {segments.map((seg) => {
+            if (seg.isPauseMarker) {
+              return (
+                <div key={seg.id} className="flex items-center justify-center my-2 opacity-75">
+                  <div className="h-[1px] bg-slate-800 flex-1"></div>
+                  <span className="mx-3 px-3 py-0.5 text-[11px] font-mono text-slate-400 bg-slate-950/80 rounded-full border border-slate-800/80 flex items-center gap-1.5">
+                    <Clock className="w-3 h-3 text-indigo-400" />
+                    Khoảng nghỉ {seg.pauseDurationSec || 12}s
+                  </span>
+                  <div className="h-[1px] bg-slate-800 flex-1"></div>
+                </div>
+              );
+            }
+
+            return (
+              <SubtitleItem
+                key={seg.id}
+                seg={seg}
+                viewMode={viewMode}
+                showTimestamps={showTimestamps}
+                copied={copiedId === seg.id}
+                fontSizeClass={getFontSizeClass()}
+                lineHeightClass={getLineHeightClass()}
+                onCopy={handleCopySegment}
+              />
+            );
+          })}
 
           {/* Currently Streaming Interim Segment */}
           {(currentInterimText || isTranslating) && (

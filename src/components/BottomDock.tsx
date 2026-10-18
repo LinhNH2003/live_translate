@@ -6,9 +6,10 @@ import {
   Pause, 
   ShieldCheck, 
   Monitor, 
-  ChevronDown 
+  ChevronDown,
+  Activity
 } from 'lucide-react';
-import type { AudioSourceType, AudioDeviceOption, ConnectionState } from '../types';
+import type { AudioSourceType, AudioDeviceOption, ConnectionState, NoiseSuppressionLevel } from '../types';
 
 interface BottomDockProps {
   connectionState: ConnectionState;
@@ -20,6 +21,8 @@ interface BottomDockProps {
   availableDevices: AudioDeviceOption[];
   selectedDeviceId: string;
   onSelectDevice: (deviceId: string) => void;
+  noiseSuppressionLevel?: NoiseSuppressionLevel;
+  onOpenSettings?: () => void;
 }
 
 const BottomDockComponent: React.FC<BottomDockProps> = ({
@@ -32,6 +35,8 @@ const BottomDockComponent: React.FC<BottomDockProps> = ({
   availableDevices,
   selectedDeviceId,
   onSelectDevice,
+  noiseSuppressionLevel = 'medium',
+  onOpenSettings,
 }) => {
   const isRunning = connectionState === 'listening' || connectionState === 'connecting' || connectionState === 'paused';
 
@@ -93,6 +98,22 @@ const BottomDockComponent: React.FC<BottomDockProps> = ({
                 </select>
                 <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
+            )}
+
+            {/* Noise suppression level badge & quick settings access */}
+            {onOpenSettings && (
+              <button
+                type="button"
+                onClick={onOpenSettings}
+                title="Cấu hình bộ lọc khử nhiễu & tăng cường giọng nói DSP"
+                className="hidden lg:flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-800 text-slate-300 text-xs transition-colors"
+              >
+                <Activity className="w-3.5 h-3.5 text-indigo-400" />
+                <span className="text-slate-400">Lọc ồn:</span>
+                <span className={`font-semibold ${noiseSuppressionLevel === 'off' ? 'text-slate-500' : 'text-indigo-300'}`}>
+                  {noiseSuppressionLevel === 'high' ? 'Mạnh' : noiseSuppressionLevel === 'low' ? 'Nhẹ' : noiseSuppressionLevel === 'off' ? 'Tắt' : 'Tiêu chuẩn'}
+                </span>
+              </button>
             )}
           </div>
 

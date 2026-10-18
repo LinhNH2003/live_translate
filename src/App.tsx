@@ -9,15 +9,17 @@ import { DEFAULT_SETTINGS } from './types';
 import { AudioStreamer, getAvailableAudioDevices } from './services/audioStreamer';
 import { GeminiLiveClient } from './services/geminiLiveClient';
 import { DemoSimulator } from './services/demoSimulator';
+import { VadService } from './services/vadService';
 import { Header } from './components/Header';
 import { LanguageBar } from './components/LanguageBar';
 import { SubtitleWorkspace } from './components/SubtitleWorkspace';
 import { BottomDock } from './components/BottomDock';
 import { SettingsModal } from './components/SettingsModal';
 import { AlertCircle, Key, PlayCircle, X } from 'lucide-react';
-import { isPureFillerText, cleanFillerWords } from './utils/textFilter';
+import { isPureFillerText, cleanFillerWords, mergeStreamTranscript } from './utils/textFilter';
 
 const STORAGE_KEY = 'lingua_live_settings_v2';
+const MAX_DOM_SEGMENTS = 80;
 
 export function App() {
   // --- Persistent Settings ---
@@ -48,12 +50,14 @@ export function App() {
   const [isPaused, setIsPaused] = useState(false);
   const [sessionDuration, setSessionDuration] = useState(0);
   const [audioVolume, setAudioVolume] = useState(0);
+  const [isUserSpeaking, setIsUserSpeaking] = useState(false);
   const [isDemoMode, setIsDemoMode] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showNoKeyAlert, setShowNoKeyAlert] = useState(false);
 
   // --- Translation States ---
   const [segments, setSegments] = useState<TranslationSegment[]>([]);
+  const allSegmentsRef = useRef<TranslationSegment[]>([]);
   const [currentInterimVi, setCurrentInterimVi] = useState('');
   const [currentInterimEn, setCurrentInterimEn] = useState<string | undefined>(undefined);
 
@@ -64,6 +68,7 @@ export function App() {
   const audioStreamerRef = useRef<AudioStreamer | null>(null);
   const geminiClientRef = useRef<GeminiLiveClient | null>(null);
   const demoSimulatorRef = useRef<DemoSimulator | null>(null);
+  const vadServiceRef = useRef<VadService | null>(null);
   const timerIntervalRef = useRef<number | null>(null);
 
   // Buffer accumulator for streaming text deltas
@@ -73,6 +78,10 @@ export function App() {
   const interimViRef = useRef<string>('');
   const interimEnRef = useRef<string>('');
   const isStoppingRef = useRef<boolean>(false);
+
+  // Client-side Silence Fallback Timer & Turn tracking
+  const silenceTimerRef = useRef<number | null>(null);
+  const lastTurnTimeRef = useRef<number>(0);
 
   // Enumerate audio devices on mount
   useEffect(() => {
@@ -92,7 +101,7 @@ export function App() {
 
   // Session timer ticker
   useEffect(() => {
-    if (connectionState === 'listening' && !isPaused) {
+    if ((connectionState === 'listening' || connectionState === 'reconnecting') && !isPaused) {
       timerIntervalRef.current = window.setInterval(() => {
         setSessionDuration((prev) => prev + 1);
       }, 1000);
@@ -106,6 +115,17 @@ export function App() {
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     };
   }, [connectionState, isPaused]);
+
+  // Cập nhật cấu hình khử nhiễu & tăng cường giọng nói DSP trực tiếp khi người dùng đổi settings
+  useEffect(() => {
+    if (audioStreamerRef.current) {
+      audioStreamerRef.current.updateEnhancerOptions({
+        level: settings.noiseSuppressionLevel,
+        enableCompressor: settings.enableVoiceCompressor,
+        enableClarityBoost: settings.enableSpeechClarityBoost,
+      });
+    }
+  }, [settings.noiseSuppressionLevel, settings.enableVoiceCompressor, settings.enableSpeechClarityBoost]);
 
   // Parse incoming text delta from Gemini Live
   const handleIncomingDelta = useCallback((delta: string) => {
@@ -138,8 +158,18 @@ export function App() {
     }
   }, []);
 
+  // Clear silence fallback timer
+  const clearSilenceTimer = useCallback(() => {
+    if (silenceTimerRef.current !== null) {
+      window.clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+  }, []);
+
   // Commit completed turn to segments history
   const handleTurnComplete = useCallback(() => {
+    clearSilenceTimer();
+
     const rawVi = interimViRef.current.trim();
     const rawEn = interimEnRef.current.trim();
 
@@ -169,6 +199,31 @@ export function App() {
 
     if (!finalVi && !finalEn) return;
 
+    const now = Date.now();
+    const pauseDiffSec = Math.round((now - lastTurnTimeRef.current) / 1000);
+    lastTurnTimeRef.current = now;
+
+    const newItems: TranslationSegment[] = [];
+
+    // Tự động chèn Pause Marker nếu khoảng nghỉ trước câu này >= 12 giây
+    if (pauseDiffSec >= 12 && allSegmentsRef.current.length > 0) {
+      newItems.push({
+        id: `pause_${now}_${Math.random().toString(36).substring(2, 6)}`,
+        timestamp: now,
+        translatedVi: '',
+        isPauseMarker: true,
+        pauseDurationSec: pauseDiffSec,
+      });
+    }
+
+    newItems.push({
+      id: `seg_${now}_${Math.random().toString(36).substring(2, 6)}`,
+      timestamp: now,
+      originalEn: finalEn || undefined,
+      translatedVi: finalVi,
+      isPartial: false,
+    });
+
     setSegments((prev) => {
       // Dedup guard: Kiểm tra trùng lặp tuyệt đối với segment vừa ghi trước đó
       const lastSeg = prev[prev.length - 1];
@@ -180,21 +235,21 @@ export function App() {
         return prev;
       }
 
-      return [
-        ...prev,
-        {
-          id: `seg_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-          timestamp: Date.now(),
-          originalEn: finalEn || undefined,
-          translatedVi: finalVi,
-          isPartial: false,
-        },
-      ];
+      const updatedAll = [...allSegmentsRef.current, ...newItems];
+      allSegmentsRef.current = updatedAll;
+
+      // Giữ tối đa MAX_DOM_SEGMENTS câu trên DOM để duy trì hiệu năng 60 FPS
+      const updatedDom = [...prev, ...newItems];
+      return updatedDom.length > MAX_DOM_SEGMENTS
+        ? updatedDom.slice(-MAX_DOM_SEGMENTS)
+        : updatedDom;
     });
-  }, [settings.filterFillerWords]);
+  }, [settings.filterFillerWords, clearSilenceTimer]);
 
   // Stop everything
   const handleStop = useCallback(() => {
+    clearSilenceTimer();
+
     // Ngăn chặn gọi lại handleStop nếu đang trong quá trình dừng
     if (isStoppingRef.current) return;
     isStoppingRef.current = true;
@@ -212,6 +267,10 @@ export function App() {
         geminiClientRef.current.disconnect();
         geminiClientRef.current = null;
       }
+      if (vadServiceRef.current) {
+        vadServiceRef.current.destroy();
+        vadServiceRef.current = null;
+      }
 
       handleTurnComplete();
 
@@ -219,12 +278,13 @@ export function App() {
       setIsPaused(false);
       setIsDemoMode(false);
       setAudioVolume(0);
+      setIsUserSpeaking(false);
     } finally {
       setTimeout(() => {
         isStoppingRef.current = false;
       }, 300);
     }
-  }, [handleTurnComplete]);
+  }, [handleTurnComplete, clearSilenceTimer]);
 
   // Start Real Gemini Live translation
   const handleStartReal = async () => {
@@ -238,16 +298,6 @@ export function App() {
     setConnectionState('requesting_permission');
 
     try {
-      // Hàm nối stream chunk thông minh, tránh thừa hoặc thiếu khoảng trắng
-      const appendStreamChunk = (prev: string | undefined, next: string): string => {
-        if (!prev) return next.trimStart();
-        if (!next) return prev;
-        if (/^[\s,.:;!?)]/.test(next) || /[\s(]$/.test(prev)) {
-          return `${prev}${next}`;
-        }
-        return `${prev} ${next}`;
-      };
-
       // 1. Create Gemini 3.5 Live Translate Client
       const geminiClient = new GeminiLiveClient({
         onOpen: () => {
@@ -256,15 +306,19 @@ export function App() {
         onSetupComplete: () => {
           setConnectionState('listening');
         },
+        onReconnecting: (attempt, maxAttempts) => {
+          console.warn(`Đang tự động kết nối lại lần ${attempt}/${maxAttempts}...`);
+          setConnectionState('reconnecting');
+        },
         onInputTranscription: (text) => {
           // Native source English speech transcript
-          const updated = appendStreamChunk(interimEnRef.current, text);
+          const updated = mergeStreamTranscript(interimEnRef.current, text);
           interimEnRef.current = updated;
           setCurrentInterimEn(updated);
         },
         onOutputTranscription: (text) => {
           // Native translated Vietnamese transcript
-          const updated = appendStreamChunk(interimViRef.current, text);
+          const updated = mergeStreamTranscript(interimViRef.current, text);
           interimViRef.current = updated;
           setCurrentInterimVi(updated);
         },
@@ -282,7 +336,7 @@ export function App() {
       });
       geminiClientRef.current = geminiClient;
 
-      // 2. Connect WebSocket with translationConfig & sliding window compression
+      // 2. Connect WebSocket with translationConfig, sliding window & custom glossary
       await geminiClient.connect({
         apiKey: settings.apiKey,
         model: settings.model || 'models/gemini-3.5-live-translate-preview',
@@ -290,6 +344,7 @@ export function App() {
         echoTargetLanguage: settings.echoTargetLanguage !== false,
         filterFillerWords: settings.filterFillerWords !== false,
         playAudioOutput: settings.playAudioOutput === true,
+        customGlossary: settings.customGlossary,
       });
 
       // 3. Start Audio Streamer
@@ -301,6 +356,24 @@ export function App() {
         },
         onVolumeChange: (vol) => {
           setAudioVolume(vol);
+
+          // Client-side Silence Fallback VAD:
+          // Nếu âm lượng rơi xuống mức im lặng (< 0.02) trong khi đang có chữ interim,
+          // hẹn giờ 1.8s để tự động chốt câu nếu server không gửi turnComplete.
+          if (vol < 0.025 && interimViRef.current.trim().length > 0) {
+            if (silenceTimerRef.current === null) {
+              silenceTimerRef.current = window.setTimeout(() => {
+                silenceTimerRef.current = null;
+                handleTurnComplete();
+              }, 1800);
+            }
+          } else if (vol >= 0.035) {
+            // Người dùng tiếp tục nói -> huỷ hẹn giờ im lặng
+            if (silenceTimerRef.current !== null) {
+              window.clearTimeout(silenceTimerRef.current);
+              silenceTimerRef.current = null;
+            }
+          }
         },
         onError: (err) => {
           let msg = err.message;
@@ -316,7 +389,52 @@ export function App() {
       });
       audioStreamerRef.current = streamer;
 
-      await streamer.start(settings.audioSourceType, settings.selectedAudioDeviceId);
+      await streamer.start({
+        sourceType: settings.audioSourceType,
+        deviceId: settings.selectedAudioDeviceId,
+        noiseSuppressionLevel: settings.noiseSuppressionLevel,
+        enableVoiceCompressor: settings.enableVoiceCompressor,
+        enableSpeechClarityBoost: settings.enableSpeechClarityBoost,
+      });
+
+      // 4. Kích hoạt Silero VAD (Voice Activity Detection bằng Deep Learning) nếu bật
+      if (settings.enableSileroVAD !== false && settings.audioSourceType === 'microphone') {
+        const currentStream = streamer.getMediaStream();
+        if (currentStream) {
+          try {
+            const vad = new VadService({
+              onSpeechStart: () => {
+                setIsUserSpeaking(true);
+                clearSilenceTimer();
+              },
+              onSpeechEnd: () => {
+                setIsUserSpeaking(false);
+                // Khi Silero VAD AI phát hiện kết thúc câu nói và đang có interim text -> chốt câu nhanh sau 450ms
+                if (interimViRef.current.trim().length > 0) {
+                  if (silenceTimerRef.current === null) {
+                    silenceTimerRef.current = window.setTimeout(() => {
+                      silenceTimerRef.current = null;
+                      handleTurnComplete();
+                    }, 450);
+                  }
+                }
+              },
+              onVADMisfire: () => {
+                setIsUserSpeaking(false);
+              },
+              onError: (vadErr) => {
+                console.warn('Silero VAD fallback to volume detector:', vadErr);
+              },
+            });
+            vadServiceRef.current = vad;
+            vad.start({
+              getStream: async () => currentStream,
+            }).catch((e) => console.warn('VAD start background:', e));
+          } catch (vadInitErr) {
+            console.warn('Cannot init Silero VAD, using volume fallback:', vadInitErr);
+          }
+        }
+      }
     } catch (err: any) {
       let msg = err?.message || 'Không thể bắt đầu phiên dịch.';
       if (err?.name === 'NotAllowedError' || msg.includes('Permission denied')) {
@@ -361,16 +479,18 @@ export function App() {
           handleIncomingDelta(delta);
         },
         onTurnComplete: (en, vi) => {
-          setSegments((prev) => [
-            ...prev,
-            {
-              id: `demo_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-              timestamp: Date.now(),
-              originalEn: en,
-              translatedVi: vi,
-              isPartial: false,
-            },
-          ]);
+          const newSeg: TranslationSegment = {
+            id: `demo_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+            timestamp: Date.now(),
+            originalEn: en,
+            translatedVi: vi,
+            isPartial: false,
+          };
+          allSegmentsRef.current = [...allSegmentsRef.current, newSeg];
+          setSegments((prev) => {
+            const next = [...prev, newSeg];
+            return next.length > MAX_DOM_SEGMENTS ? next.slice(-MAX_DOM_SEGMENTS) : next;
+          });
           textBufferRef.current = '';
           setCurrentInterimVi('');
           setCurrentInterimEn(undefined);
@@ -387,6 +507,7 @@ export function App() {
 
   const handleClearSegments = useCallback(() => {
     setSegments([]);
+    allSegmentsRef.current = [];
     interimViRef.current = '';
     interimEnRef.current = '';
     setCurrentInterimVi('');
@@ -442,6 +563,7 @@ export function App() {
         connectionState={connectionState}
         sessionDuration={sessionDuration}
         audioVolume={audioVolume}
+        isUserSpeaking={isUserSpeaking}
         isDemoMode={isDemoMode}
         onToggleDemoMode={handleToggleDemoMode}
         onOpenSettings={handleOpenSettings}
@@ -550,6 +672,8 @@ export function App() {
         availableDevices={availableDevices}
         selectedDeviceId={settings.selectedAudioDeviceId}
         onSelectDevice={handleSelectDevice}
+        noiseSuppressionLevel={settings.noiseSuppressionLevel}
+        onOpenSettings={() => setIsSettingsOpen(true)}
       />
 
       {/* Settings Modal */}

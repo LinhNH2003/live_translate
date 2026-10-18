@@ -10,9 +10,10 @@ import {
   Cpu, 
   Sliders, 
   Trash2,
-  Sparkles
+  Sparkles,
+  Activity
 } from 'lucide-react';
-import type { AppSettings, AudioDeviceOption, FontSizeOption } from '../types';
+import type { AppSettings, AudioDeviceOption, FontSizeOption, NoiseSuppressionLevel } from '../types';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -41,7 +42,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [maxWidth, setMaxWidth] = useState(settings.maxWidth);
   const [showTimestamps, setShowTimestamps] = useState(settings.showTimestamps);
   const [filterFillerWords, setFilterFillerWords] = useState(settings.filterFillerWords ?? true);
+  const [customGlossary, setCustomGlossary] = useState(settings.customGlossary || '');
   const [selectedDeviceId, setSelectedDeviceId] = useState(settings.selectedAudioDeviceId);
+  const [noiseSuppressionLevel, setNoiseSuppressionLevel] = useState<NoiseSuppressionLevel>(settings.noiseSuppressionLevel || 'medium');
+  const [enableVoiceCompressor, setEnableVoiceCompressor] = useState(settings.enableVoiceCompressor ?? true);
+  const [enableSpeechClarityBoost, setEnableSpeechClarityBoost] = useState(settings.enableSpeechClarityBoost ?? true);
+  const [enableSileroVAD, setEnableSileroVAD] = useState(settings.enableSileroVAD ?? true);
 
   if (!isOpen) return null;
 
@@ -93,7 +99,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       maxWidth,
       showTimestamps,
       filterFillerWords,
+      customGlossary: customGlossary.trim(),
       selectedAudioDeviceId: selectedDeviceId,
+      noiseSuppressionLevel,
+      enableVoiceCompressor,
+      enableSpeechClarityBoost,
+      enableSileroVAD,
     });
     onClose();
   };
@@ -455,9 +466,128 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
               />
             </div>
+
+            {/* Custom Glossary / Specialized vocabulary */}
+            <div className="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-2">
+              <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Từ vựng ưu tiên & Khẩu ngữ địa phương (Custom Glossary)</span>
+              </label>
+              <textarea
+                value={customGlossary}
+                onChange={(e) => setCustomGlossary(e.target.value)}
+                placeholder="Ví dụ: Kubernetes, Antigravity, microservice, răng rứa mô tê, prompt engineering..."
+                rows={2}
+                className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500 font-sans resize-none"
+              />
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                Nhập các danh từ riêng, thuật ngữ kỹ thuật hoặc tiếng địa phương (cách nhau bởi dấu phẩy). Mô hình Gemini sẽ ưu tiên nhận diện và dịch chính xác các từ này khi nghe văn nói.
+              </p>
+            </div>
           </div>
 
-          {/* Section: Audio Input Device */}
+            {/* Section: Audio DSP & Noise Suppression */}
+            <div className="space-y-4 pt-2">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-1.5">
+                <Activity className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Xử lý âm thanh & Khử nhiễu lọc ồn DSP (Audio Enhancement)</span>
+              </h3>
+
+              {/* Noise suppression level selection */}
+              <div>
+                <label className="text-xs text-slate-300 font-medium block mb-2">
+                  Mức độ lọc ồn & triệt tiêu tạp âm nền
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {[
+                    { id: 'off', label: 'Tắt (Raw)', desc: 'Thu mộc không lọc' },
+                    { id: 'low', label: 'Nhẹ', desc: 'Cắt rung & ù trầm' },
+                    { id: 'medium', label: 'Tiêu chuẩn', desc: 'Khuyên dùng' },
+                    { id: 'high', label: 'Mạnh', desc: 'Quán cafe / ồn ào' },
+                  ].map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setNoiseSuppressionLevel(item.id as NoiseSuppressionLevel)}
+                      className={`p-2.5 rounded-2xl border text-left transition-all ${
+                        noiseSuppressionLevel === item.id
+                          ? 'bg-indigo-600/20 border-indigo-500 text-white shadow-sm ring-1 ring-indigo-500/50'
+                          : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
+                      }`}
+                    >
+                      <div className="text-xs font-bold text-slate-200">{item.label}</div>
+                      <div className="text-[10px] text-slate-400 mt-0.5 leading-tight">{item.desc}</div>
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[11px] text-slate-400 mt-2 leading-relaxed">
+                  Sử dụng bộ lọc DSP Butterworth (cắt tần số rác dưới 85Hz & trên 7.5kHz, cắt tiếng rè điện 50/60Hz) kết hợp Soft Noise Gate tự động triệt tiêu tiếng xì rè nền khi ngưng nói mà không làm biến dạng giọng nói.
+                </p>
+              </div>
+
+              {/* Voice Compressor toggle */}
+              <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-950/60 border border-slate-800">
+                <div>
+                  <span className="text-xs font-semibold text-slate-200 block">
+                    Cân bằng & Tăng cường âm lượng thông minh (Voice Compressor / AGC)
+                  </span>
+                  <span className="text-[11px] text-slate-400">
+                    Tự động nén âm lượng lớn chống vỡ tiếng và khuếch đại khi nói nhỏ hoặc ngồi xa micro
+                  </span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={enableVoiceCompressor}
+                  onChange={(e) => setEnableVoiceCompressor(e.target.checked)}
+                  className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                />
+              </div>
+
+              {/* Speech Clarity Boost toggle */}
+              <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-950/60 border border-slate-800">
+                <div>
+                  <span className="text-xs font-semibold text-slate-200 block">
+                    Tăng độ nét phát âm giọng nói (Speech Clarity Boost)
+                  </span>
+                  <span className="text-[11px] text-slate-400">
+                    Tối ưu dải tần 3.0 kHz (Formant thanh quản) giúp mô hình Gemini nhận diện từ vựng sắc nét hơn
+                  </span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={enableSpeechClarityBoost}
+                  onChange={(e) => setEnableSpeechClarityBoost(e.target.checked)}
+                  className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                />
+              </div>
+
+              {/* Silero VAD Neural Speech Detection toggle */}
+              <div className="flex items-center justify-between p-3.5 rounded-2xl bg-gradient-to-r from-emerald-950/40 via-teal-950/30 to-indigo-950/30 border border-emerald-500/30">
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-emerald-200 block">
+                      Silero VAD AI - Nhận diện giọng nói chuẩn xác
+                    </span>
+                    <span className="px-1.5 py-0.5 text-[9px] font-extrabold uppercase rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      ONNX Neural Net
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-slate-400 block mt-0.5 leading-relaxed">
+                    Sử dụng mạng nơ-ron học sâu Silero VAD phân biệt chính xác tiếng người nói thật sự với tiếng thở, tiếng gõ phím, ho/cười. Tự động chốt câu phụ đề siêu tốc (&lt;450ms) ngay khi dứt lời.
+                  </span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={enableSileroVAD}
+                  onChange={(e) => setEnableSileroVAD(e.target.checked)}
+                  className="w-4 h-4 rounded text-emerald-500 focus:ring-emerald-400 cursor-pointer ml-3 shrink-0"
+                />
+              </div>
+            </div>
+
+            <div className="border-t border-slate-800/80 my-4" />
+
+            {/* Section: Audio Input Device */}
           {availableDevices.length > 0 && (
             <div className="space-y-2">
               <label className="text-xs font-bold uppercase tracking-wider text-indigo-400 block">

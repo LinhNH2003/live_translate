@@ -1,20 +1,21 @@
 /**
  * Smart Filler Words & Disfluency Filter
  * Khử các từ đệm, tiếng ậm ừ, ngập ngừng (hesitations, speech disfluencies)
- * trong các cuộc hội thoại tiếng Anh và tiếng Việt.
+ * và xử lý ghép chuỗi chống lặp khi người dùng nói lắp hoặc đính chính.
  */
 
-// Danh sách các từ đệm tiếng Anh đứng độc lập hoặc lặp đi lặp lại
+// Danh sách các từ đệm tiếng Anh
 const EN_FILLERS = [
   'um', 'uh', 'er', 'ah', 'aah', 'umm', 'uhh', 'err', 'ahh',
   'like', 'you know', 'i mean', 'hmm', 'mhm', 'huh', 'eh',
-  'so yeah', 'yeah so', 'kind of', 'sort of'
+  'so yeah', 'yeah so', 'kind of', 'sort of', 'actually', 'basically', 'well'
 ];
 
 // Danh sách các từ đệm tiếng Việt
 const VI_FILLERS = [
   'ừm', 'ờ', 'à', 'ừ', 'a', 'aaa', 'ờm', 'hả', 'hử',
-  'kiểu', 'kiểu như', 'kiểu là', 'thì là', 'ý là', 'dạ vâng', 'vâng ạ'
+  'kiểu', 'kiểu như', 'kiểu là', 'kiểu như là', 'thì là', 'thì là mà',
+  'ý là', 'ý của mình là', 'ờ thì', 'ừ thì', 'dạ vâng', 'vâng ạ', 'dạ vâng thì'
 ];
 
 // Regex kiểm tra xem toàn bộ chuỗi có chỉ chứa các từ đệm, tiếng thở, tiếng ngập ngừng hay không
@@ -22,8 +23,8 @@ const PURE_FILLER_REGEX = new RegExp(
   `^[\\s.,!?;:…\\-–—"'\`()[\\]{}|/~]*` +
   `(?:${[
     'u+[hm]+', 'u+h+', 'e+r+', 'a+h*', 'h+m+', 'm+h+m+', 'o+h+',
-    'ừ+m*', 'ờ+m*', 'à+', 'ừ+', 'kiểu(?:\\s+như|\\s+là)?', 'thì\\s+là', 'ý\\s+là',
-    'you\\s+know', 'i\\s+mean', 'like', 'so\\s+yeah', 'yeah'
+    'ừ+m*', 'ờ+m*', 'à+', 'ừ+', 'kiểu(?:\\s+như(?:\\s+là)?|\\s+là)?', 'thì\\s+là(?:\\s+mà)?', 'ý\\s+(?:của\\s+mình\\s+)?là',
+    'you\\s+know', 'i\\s+mean', 'like', 'so\\s+yeah', 'yeah', 'actually', 'basically', 'well'
   ].join('|')})` +
   `[\\s.,!?;:…\\-–—"'\`()[\\]{}|/~]*$`,
   'i'
@@ -32,7 +33,7 @@ const PURE_FILLER_REGEX = new RegExp(
 // Regex tìm từ đệm nằm ở đầu câu để dọn dẹp
 const LEADING_FILLER_REGEX = new RegExp(
   `^(?:[\\s.,!?;:…\\-–—"'\`()[\\]{}|/~]|` +
-  `\\b(?:um+|uh+|er+|ah+|hmm+|like|you\\s+know|ừm|ờ|à|kiểu\\s+như)\\b)+[,\\s:;–—]+`,
+  `\\b(?:um+|uh+|er+|ah+|hmm+|like|you\\s+know|ừm|ờ|à|kiểu(?:\\s+như)?|thì\\s+là)\\b)+[,\\s:;–—]+`,
   'i'
 );
 
@@ -75,14 +76,24 @@ export function isPureFillerText(text: string): boolean {
 }
 
 /**
+ * Khử hiện tượng nói lắp hoặc lặp từ liên tiếp do ngập ngừng
+ * Ví dụ: "Tôi... tôi muốn đi" -> "Tôi muốn đi", "we we need to" -> "we need to"
+ */
+export function removeStutters(text: string): string {
+  if (!text) return '';
+  // Khử từ lặp lại dạng: "\b(từ)\s+...\s+\1\b"
+  return text.replace(/\b([a-zA-Zà-ỹÀ-Ỹ0-9]+)(?:[.,…\s-]+)+\1\b/gi, '$1');
+}
+
+/**
  * Làm sạch từ đệm nằm ở đầu câu hoặc dạng ngập ngừng lặp lại.
- * Ví dụ:
- * - "Um, so today we will begin..." -> "So today we will begin..."
- * - "Ừm, hôm nay chúng ta sẽ bắt đầu..." -> "Hôm nay chúng ta sẽ bắt đầu..."
  */
 export function cleanFillerWords(text: string): string {
   if (!text) return '';
   let cleaned = text.trim();
+
+  // Khử lặp từ do nói lắp
+  cleaned = removeStutters(cleaned);
 
   // Khử các từ đệm đứng đầu câu
   const match = cleaned.match(LEADING_FILLER_REGEX);
@@ -95,4 +106,35 @@ export function cleanFillerWords(text: string): string {
   }
 
   return cleaned;
+}
+
+/**
+ * Ghép chuỗi thông minh (Smart Transcript Merger)
+ * Giải quyết triệt để 2 trường hợp:
+ * 1. Server gửi full replacement (toàn bộ câu đã sửa/bổ sung) -> thay thế luôn để không bị lặp.
+ * 2. Server gửi delta chunk -> nối thông minh, không thừa hoặc thiếu khoảng trắng.
+ */
+export function mergeStreamTranscript(prev: string | undefined, incoming: string): string {
+  if (!prev) return incoming.trimStart();
+  if (!incoming) return prev;
+
+  const trimmedPrev = prev.trim();
+  const trimmedIncoming = incoming.trim();
+
+  // Nếu chuỗi mới là một câu hoàn chỉnh bao hàm chuỗi cũ (Server gửi full revised string)
+  if (trimmedIncoming.startsWith(trimmedPrev) && trimmedIncoming.length > trimmedPrev.length) {
+    return trimmedIncoming;
+  }
+
+  // Nếu chuỗi mới hoàn toàn giống chuỗi cũ (dup)
+  if (trimmedIncoming === trimmedPrev) {
+    return prev;
+  }
+
+  // Nếu là delta chunk bình thường
+  if (/^[\s,.:;!?)]/.test(incoming) || /[\s(]$/.test(prev)) {
+    return `${prev}${incoming}`;
+  }
+
+  return `${prev} ${incoming}`;
 }
