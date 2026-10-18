@@ -1,7 +1,10 @@
 {
   "name": "live_translate",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
+  "description": "Ứng dụng dịch trực tiếp phụ đề và giọng nói thời gian thực với Google Gemini Live API & Web Audio DSP",
+  "author": "LinhNH2003",
+  "license": "Apache-2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
