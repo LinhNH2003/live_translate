@@ -16,7 +16,13 @@ import { SubtitleWorkspace } from './components/SubtitleWorkspace';
 import { BottomDock } from './components/BottomDock';
 import { SettingsModal } from './components/SettingsModal';
 import { AlertCircle, Key, PlayCircle, X } from 'lucide-react';
-import { isPureFillerText, cleanFillerWords, mergeStreamTranscript } from './utils/textFilter';
+import { 
+  isPureFillerText, 
+  cleanFillerWords, 
+  mergeStreamTranscript, 
+  splitBilingualStream, 
+  type BilingualPair 
+} from './utils/textFilter';
 
 const STORAGE_KEY = 'lingua_live_settings_v2';
 const MAX_DOM_SEGMENTS = 80;
@@ -166,6 +172,104 @@ export function App() {
     }
   }, []);
 
+  // Commit một danh sách các cặp câu (VI - EN) thành các segment hoàn chỉnh trong lịch sử
+  const commitCompletedPairs = useCallback((pairs: BilingualPair[]) => {
+    if (!pairs || pairs.length === 0) return;
+
+    const newItems: TranslationSegment[] = [];
+    const now = Date.now();
+
+    for (const pair of pairs) {
+      const rawVi = pair.vi.trim();
+      const rawEn = pair.en ? pair.en.trim() : '';
+
+      if (!rawVi && !rawEn) continue;
+
+      // Bộ lọc từ đệm thông minh: Nếu bật filterFillerWords và turn chỉ toàn tiếng ngập ngừng/ậm ừ -> bỏ qua
+      if (settings.filterFillerWords) {
+        const isViFiller = isPureFillerText(rawVi);
+        const isEnFiller = !rawEn || isPureFillerText(rawEn);
+        if (isViFiller && isEnFiller) continue;
+      }
+
+      // Khử từ đệm đứng đầu câu nếu có
+      const finalVi = settings.filterFillerWords ? cleanFillerWords(rawVi) : rawVi;
+      const finalEn = settings.filterFillerWords && rawEn ? cleanFillerWords(rawEn) : rawEn;
+
+      if (!finalVi && !finalEn) continue;
+
+      const pauseDiffSec = Math.round((now - lastTurnTimeRef.current) / 1000);
+      lastTurnTimeRef.current = now;
+
+      // Tự động chèn Pause Marker nếu khoảng nghỉ trước câu này >= 12 giây
+      if (pauseDiffSec >= 12 && allSegmentsRef.current.length > 0 && newItems.length === 0) {
+        newItems.push({
+          id: `pause_${now}_${Math.random().toString(36).substring(2, 6)}`,
+          timestamp: now,
+          translatedVi: '',
+          isPauseMarker: true,
+          pauseDurationSec: pauseDiffSec,
+        });
+      }
+
+      newItems.push({
+        id: `seg_${now}_${Math.random().toString(36).substring(2, 6)}`,
+        timestamp: now,
+        originalEn: finalEn || undefined,
+        translatedVi: finalVi,
+        isPartial: false,
+      });
+    }
+
+    if (newItems.length === 0) return;
+
+    setSegments((prev) => {
+      // Dedup guard: Kiểm tra trùng lặp với segment vừa ghi trước đó
+      const validItems = newItems.filter((item) => {
+        if (item.isPauseMarker) return true;
+        const lastSeg = prev[prev.length - 1];
+        if (
+          lastSeg &&
+          lastSeg.translatedVi === item.translatedVi &&
+          (!item.originalEn || lastSeg.originalEn === item.originalEn)
+        ) {
+          return false;
+        }
+        return true;
+      });
+
+      if (validItems.length === 0) return prev;
+
+      const updatedAll = [...allSegmentsRef.current, ...validItems];
+      allSegmentsRef.current = updatedAll;
+
+      // Giữ tối đa MAX_DOM_SEGMENTS câu trên DOM để duy trì hiệu năng 60 FPS
+      const updatedDom = [...prev, ...validItems];
+      return updatedDom.length > MAX_DOM_SEGMENTS
+        ? updatedDom.slice(-MAX_DOM_SEGMENTS)
+        : updatedDom;
+    });
+  }, [settings.filterFillerWords]);
+
+  // Phân tích và tự động tách câu trong lúc stream (Real-time Streaming Sentence Splitter)
+  const processStreamSplit = useCallback(() => {
+    const rawVi = interimViRef.current;
+    const rawEn = interimEnRef.current;
+
+    if (!rawVi || rawVi.trim().length === 0) return;
+
+    const result = splitBilingualStream(rawVi, rawEn);
+
+    if (result.completedPairs.length > 0) {
+      commitCompletedPairs(result.completedPairs);
+
+      interimViRef.current = result.pendingVi;
+      interimEnRef.current = result.pendingEn || '';
+      setCurrentInterimVi(result.pendingVi);
+      setCurrentInterimEn(result.pendingEn);
+    }
+  }, [commitCompletedPairs]);
+
   // Commit completed turn to segments history
   const handleTurnComplete = useCallback(() => {
     clearSilenceTimer();
@@ -180,71 +284,10 @@ export function App() {
     setCurrentInterimEn(undefined);
     textBufferRef.current = '';
 
-    // Nếu không có nội dung chữ nào thì thoát ngay lập tức, không lưu segment rỗng
     if (!rawVi && !rawEn) return;
 
-    // Bộ lọc từ đệm thông minh: Nếu bật filterFillerWords và turn chỉ toàn tiếng ngập ngừng/ậm ừ -> bỏ qua
-    if (settings.filterFillerWords) {
-      const isViFiller = isPureFillerText(rawVi);
-      const isEnFiller = !rawEn || isPureFillerText(rawEn);
-
-      if (isViFiller && isEnFiller) {
-        return;
-      }
-    }
-
-    // Khử từ đệm đứng đầu câu nếu có
-    const finalVi = settings.filterFillerWords ? cleanFillerWords(rawVi) : rawVi;
-    const finalEn = settings.filterFillerWords && rawEn ? cleanFillerWords(rawEn) : rawEn;
-
-    if (!finalVi && !finalEn) return;
-
-    const now = Date.now();
-    const pauseDiffSec = Math.round((now - lastTurnTimeRef.current) / 1000);
-    lastTurnTimeRef.current = now;
-
-    const newItems: TranslationSegment[] = [];
-
-    // Tự động chèn Pause Marker nếu khoảng nghỉ trước câu này >= 12 giây
-    if (pauseDiffSec >= 12 && allSegmentsRef.current.length > 0) {
-      newItems.push({
-        id: `pause_${now}_${Math.random().toString(36).substring(2, 6)}`,
-        timestamp: now,
-        translatedVi: '',
-        isPauseMarker: true,
-        pauseDurationSec: pauseDiffSec,
-      });
-    }
-
-    newItems.push({
-      id: `seg_${now}_${Math.random().toString(36).substring(2, 6)}`,
-      timestamp: now,
-      originalEn: finalEn || undefined,
-      translatedVi: finalVi,
-      isPartial: false,
-    });
-
-    setSegments((prev) => {
-      // Dedup guard: Kiểm tra trùng lặp tuyệt đối với segment vừa ghi trước đó
-      const lastSeg = prev[prev.length - 1];
-      if (
-        lastSeg &&
-        lastSeg.translatedVi === finalVi &&
-        (!finalEn || lastSeg.originalEn === finalEn)
-      ) {
-        return prev;
-      }
-
-      const updatedAll = [...allSegmentsRef.current, ...newItems];
-      allSegmentsRef.current = updatedAll;
-
-      // Giữ tối đa MAX_DOM_SEGMENTS câu trên DOM để duy trì hiệu năng 60 FPS
-      const updatedDom = [...prev, ...newItems];
-      return updatedDom.length > MAX_DOM_SEGMENTS
-        ? updatedDom.slice(-MAX_DOM_SEGMENTS)
-        : updatedDom;
-    });
-  }, [settings.filterFillerWords, clearSilenceTimer]);
+    commitCompletedPairs([{ vi: rawVi, en: rawEn || undefined }]);
+  }, [clearSilenceTimer, commitCompletedPairs]);
 
   // Stop everything
   const handleStop = useCallback(() => {
@@ -315,12 +358,14 @@ export function App() {
           const updated = mergeStreamTranscript(interimEnRef.current, text);
           interimEnRef.current = updated;
           setCurrentInterimEn(updated);
+          processStreamSplit();
         },
         onOutputTranscription: (text) => {
           // Native translated Vietnamese transcript
           const updated = mergeStreamTranscript(interimViRef.current, text);
           interimViRef.current = updated;
           setCurrentInterimVi(updated);
+          processStreamSplit();
         },
         onTurnComplete: () => {
           handleTurnComplete();
@@ -359,13 +404,13 @@ export function App() {
 
           // Client-side Silence Fallback VAD:
           // Nếu âm lượng rơi xuống mức im lặng (< 0.02) trong khi đang có chữ interim,
-          // hẹn giờ 1.8s để tự động chốt câu nếu server không gửi turnComplete.
+          // hẹn giờ 1.2s để tự động chốt câu nếu server không gửi turnComplete.
           if (vol < 0.025 && interimViRef.current.trim().length > 0) {
             if (silenceTimerRef.current === null) {
               silenceTimerRef.current = window.setTimeout(() => {
                 silenceTimerRef.current = null;
                 handleTurnComplete();
-              }, 1800);
+              }, 1200);
             }
           } else if (vol >= 0.035) {
             // Người dùng tiếp tục nói -> huỷ hẹn giờ im lặng

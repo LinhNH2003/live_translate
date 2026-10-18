@@ -28,8 +28,12 @@ export function useSmoothText(targetText: string, baseSpeedMs: number = 25): str
       return;
     }
 
-    // 2. Nếu targetText thay đổi đột ngột (không bắt đầu bằng text hiện tại), cập nhật ngay
+    // 2. Nếu targetText thay đổi đột ngột (không bắt đầu bằng text hiện tại), cập nhật ngay và xóa timer cũ
     if (!targetText.startsWith(displayedRef.current)) {
+      if (timerRef.current !== null) {
+        window.clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
       setDisplayedText(targetText);
       displayedRef.current = targetText;
       return;

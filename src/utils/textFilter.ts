@@ -138,3 +138,151 @@ export function mergeStreamTranscript(prev: string | undefined, incoming: string
 
   return `${prev} ${incoming}`;
 }
+
+// Tập hợp các từ viết tắt phổ biến trong tiếng Anh và tiếng Việt để tránh ngắt nhầm câu
+const COMMON_ABBREVIATIONS = new Set([
+  'mr', 'mrs', 'ms', 'dr', 'prof', 'sr', 'jr', 'vs', 'etc', 'ie', 'eg',
+  'tp', 'ths', 'ts', 'gs', 'tt', 'ubnd', 'vnd', 'usd', 'inc', 'corp', 'ltd', 'co',
+  'approx', 'dept', 'est', 'govt', 'intl', 'no', 'vol'
+]);
+
+export interface SplitResult {
+  completed: string[];
+  pending: string;
+}
+
+/**
+ * Tự động nhận diện và tách các câu đã hoàn chỉnh từ luồng văn bản streaming.
+ * Đảm bảo:
+ * 1. Nhận diện chuẩn xác dấu ngắt câu (. ? ! ...) kèm theo từ câu mới.
+ * 2. Không ngắt nhầm số thập phân (VD: 3.5, 4.0) hay từ viết tắt (VD: Mr. Mark, Dr. John).
+ * 3. Hỗ trợ ngắt mềm khi câu quá dài (> 120 ký tự) tại các liên từ hoặc dấu phẩy để tránh card phình to.
+ */
+export function splitStreamingSentences(text: string): SplitResult {
+  if (!text || text.trim().length === 0) {
+    return { completed: [], pending: '' };
+  }
+
+  const completed: string[] = [];
+  let remaining = text.trim();
+
+  // Pattern tìm điểm kết thúc câu:
+  // Dấu [.?!]+ kèm theo ký tự đóng ngoặc nếu có, theo sau bởi khoảng trắng và ký tự bắt đầu câu tiếp theo (hoặc xuống dòng)
+  const sentenceBoundaryRegex = /([.?!]+["')\]}]?)(?:\s+(?=[A-ZÀ-Ỹa-zà-ỹ0-9"'(])|\n+)/g;
+
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = sentenceBoundaryRegex.exec(remaining)) !== null) {
+    const punctWithClosing = match[1];
+    const matchIndex = match.index;
+    const matchEnd = matchIndex + match[0].length;
+    const candidateEnd = matchIndex + punctWithClosing.length;
+    const candidate = remaining.slice(lastIndex, candidateEnd).trim();
+
+    // 1. Kiểm tra số thập phân (ví dụ: 3.5, 10.5)
+    const charBefore = matchIndex > 0 ? remaining[matchIndex - 1] : '';
+    const charAfter = matchIndex + 1 < remaining.length ? remaining[matchIndex + 1] : '';
+    if (punctWithClosing.startsWith('.') && /\d/.test(charBefore) && /\d/.test(charAfter)) {
+      continue;
+    }
+
+    // 2. Kiểm tra từ viết tắt (Mr., Dr., v.v.)
+    const words = candidate.split(/\s+/);
+    const lastWord = words[words.length - 1]?.replace(/[^a-zA-Zà-ỹÀ-Ỹ]/g, '').toLowerCase();
+    if (punctWithClosing.startsWith('.') && lastWord && COMMON_ABBREVIATIONS.has(lastWord)) {
+      continue;
+    }
+
+    // 3. Đảm bảo phần còn lại của câu kế tiếp có ít nhất 2 ký tự thì mới chốt câu trước
+    const rest = remaining.slice(matchEnd).trim();
+    if (candidate.length > 0 && rest.length >= 2) {
+      completed.push(candidate);
+      lastIndex = matchEnd;
+    }
+  }
+
+  let pending = remaining.slice(lastIndex).trim();
+
+  // 4. Soft boundary fallback: Nếu câu pending quá dài (> 140 ký tự) không hề có dấu chấm,
+  // tìm dấu phẩy hoặc chấm phẩy để ngắt nhằm giữ kích thước card subtitle luôn gọn gàng
+  if (pending.length > 140) {
+    const commaIndex = pending.lastIndexOf(',', 120);
+    const semicolonIndex = pending.lastIndexOf(';', 120);
+    const splitPoint = Math.max(commaIndex, semicolonIndex);
+
+    if (splitPoint >= 60 && pending.length - splitPoint >= 25) {
+      const longPart = pending.slice(0, splitPoint + 1).trim();
+      const nextPending = pending.slice(splitPoint + 1).trim();
+      if (longPart.length > 0 && nextPending.length > 0) {
+        completed.push(longPart);
+        pending = nextPending;
+      }
+    }
+  }
+
+  return { completed, pending };
+}
+
+export interface BilingualPair {
+  vi: string;
+  en?: string;
+}
+
+export interface BilingualStreamSplitResult {
+  completedPairs: BilingualPair[];
+  pendingVi: string;
+  pendingEn?: string;
+}
+
+/**
+ * Căn chỉnh và tách câu đồng thời cho luồng song ngữ (Tiếng Việt và Tiếng Anh).
+ * Ghép các cặp câu đã hoàn chỉnh tương ứng để đẩy vào danh sách card phụ đề.
+ */
+export function splitBilingualStream(viText: string, enText?: string): BilingualStreamSplitResult {
+  const viSplit = splitStreamingSentences(viText);
+
+  // Nếu không có tiếng Anh (chế độ chỉ tiếng Việt hoặc chưa có input transcript)
+  if (!enText || enText.trim().length === 0) {
+    return {
+      completedPairs: viSplit.completed.map((vi) => ({ vi })),
+      pendingVi: viSplit.pending,
+      pendingEn: undefined,
+    };
+  }
+
+  const enSplit = splitStreamingSentences(enText);
+
+  // Số lượng cặp câu đồng bộ hoàn thành
+  let commitCount = Math.min(viSplit.completed.length, enSplit.completed.length);
+
+  // Nếu tiếng Việt đã ngắt được từ 2 câu trở lên mà tiếng Anh nói liền hơi chưa ngắt kịp
+  // -> giải phóng bớt câu tiếng Việt đầu tiên kèm câu tiếng Anh đầu tiên (hoặc undefined) để tránh nghẽn UI
+  if (viSplit.completed.length >= 2 && enSplit.completed.length === 0) {
+    commitCount = 1;
+  }
+
+  const completedPairs: BilingualPair[] = [];
+  for (let i = 0; i < commitCount; i++) {
+    completedPairs.push({
+      vi: viSplit.completed[i],
+      en: enSplit.completed[i] || undefined,
+    });
+  }
+
+  // Thu gom phần câu chưa commit vào pending
+  const uncommittedVi = viSplit.completed.slice(commitCount);
+  const pendingViParts = [...uncommittedVi, viSplit.pending].filter(Boolean);
+  const pendingVi = pendingViParts.join(' ');
+
+  const uncommittedEn = enSplit.completed.slice(commitCount);
+  const pendingEnParts = [...uncommittedEn, enSplit.pending].filter(Boolean);
+  const pendingEn = pendingEnParts.join(' ');
+
+  return {
+    completedPairs,
+    pendingVi,
+    pendingEn: pendingEn || undefined,
+  };
+}
+
