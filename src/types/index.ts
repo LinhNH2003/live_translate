@@ -56,7 +56,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   echoTargetLanguage: true,
   playAudioOutput: false,
   viewMode: 'vi_only',
-  fontSize: 'xl',
+  fontSize: 'md',
   lineHeight: 'relaxed',
   maxWidth: 'default',
   autoScroll: true,

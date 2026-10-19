@@ -37,6 +37,7 @@ interface SubtitleItemProps {
   showTimestamps: boolean;
   copied: boolean;
   fontSizeClass: string;
+  enFontSizeClass: string;
   lineHeightClass: string;
   onCopy: (id: string, text: string) => void;
 }
@@ -47,12 +48,13 @@ const SubtitleItem = React.memo<SubtitleItemProps>(({
   showTimestamps,
   copied,
   fontSizeClass,
+  enFontSizeClass,
   lineHeightClass,
   onCopy,
 }) => {
   return (
-    <div className="group relative p-4 sm:p-5 rounded-2xl bg-slate-900/70 border border-slate-800/80 hover:border-indigo-500/30 transition-all shadow-md">
-      <div className="flex items-center justify-between mb-2 text-xs text-slate-400">
+    <div className="group relative p-3 sm:p-3.5 rounded-xl bg-slate-900/70 border border-slate-800/80 hover:border-indigo-500/30 transition-all shadow-md">
+      <div className="flex items-center justify-between mb-1.5 text-[11px] text-slate-400">
         {showTimestamps && (
           <span className="flex items-center gap-1 font-mono">
             <Clock className="w-3 h-3 text-slate-400" />
@@ -76,8 +78,8 @@ const SubtitleItem = React.memo<SubtitleItemProps>(({
       </div>
 
       {viewMode === 'bilingual' && seg.originalEn && (
-        <div className="text-sm sm:text-base font-normal text-slate-400 mb-2 border-b border-slate-800/60 pb-2">
-          <span className="text-slate-400 font-semibold mr-1.5 uppercase text-xs">EN:</span>
+        <div className={`font-normal text-slate-400 mb-1.5 border-b border-slate-800/60 pb-1.5 ${enFontSizeClass}`}>
+          <span className="text-slate-400 font-semibold mr-1.5 uppercase text-[11px]">EN:</span>
           <span className="italic">{seg.originalEn}</span>
         </div>
       )}
@@ -86,7 +88,7 @@ const SubtitleItem = React.memo<SubtitleItemProps>(({
         className={`font-semibold tracking-tight text-white ${fontSizeClass} ${lineHeightClass}`}
       >
         {viewMode === 'bilingual' && (
-          <span className="text-indigo-400 font-bold mr-2 uppercase text-xs inline-block align-middle">VI:</span>
+          <span className="text-indigo-400 font-bold mr-1.5 uppercase text-[11px] inline-block align-middle">VI:</span>
         )}
         <span>{seg.translatedVi}</span>
       </div>
@@ -219,17 +221,35 @@ const SubtitleWorkspaceComponent: React.FC<SubtitleWorkspaceProps> = ({
   const getFontSizeClass = () => {
     switch (fontSize) {
       case 'sm':
-        return 'text-base sm:text-lg';
+        return 'text-sm sm:text-base';
       case 'md':
-        return 'text-lg sm:text-xl';
+        return 'text-base sm:text-lg';
       case 'lg':
-        return 'text-xl sm:text-2xl';
+        return 'text-lg sm:text-xl';
       case 'xl':
-        return 'text-2xl sm:text-3xl';
+        return 'text-xl sm:text-2xl';
       case '2xl':
-        return 'text-3xl sm:text-4xl';
-      default:
         return 'text-2xl sm:text-3xl';
+      default:
+        return 'text-base sm:text-lg';
+    }
+  };
+
+  // English bilingual font size classes
+  const getEnFontSizeClass = () => {
+    switch (fontSize) {
+      case 'sm':
+        return 'text-xs sm:text-sm';
+      case 'md':
+        return 'text-xs sm:text-sm';
+      case 'lg':
+        return 'text-sm sm:text-base';
+      case 'xl':
+        return 'text-base sm:text-lg';
+      case '2xl':
+        return 'text-lg sm:text-xl';
+      default:
+        return 'text-xs sm:text-sm';
     }
   };
 
@@ -373,7 +393,7 @@ const SubtitleWorkspaceComponent: React.FC<SubtitleWorkspaceProps> = ({
         <div
           ref={containerRef}
           onScroll={handleScroll}
-          className="flex-1 overflow-y-auto px-4 py-6 rounded-2xl bg-gradient-to-b from-slate-900/40 via-slate-900/20 to-slate-950/60 border border-slate-800/60 shadow-2xl space-y-6 min-h-[380px] max-h-[calc(100vh-280px)]"
+          className="flex-1 overflow-y-auto px-3 sm:px-4 py-3 sm:py-4 rounded-xl bg-gradient-to-b from-slate-900/40 via-slate-900/20 to-slate-950/60 border border-slate-800/60 shadow-2xl space-y-3 sm:space-y-3.5 min-h-[350px] max-h-[calc(100vh-270px)]"
         >
           {/* Empty State */}
           {!hasContent && (
@@ -425,6 +445,7 @@ const SubtitleWorkspaceComponent: React.FC<SubtitleWorkspaceProps> = ({
                 showTimestamps={showTimestamps}
                 copied={copiedId === seg.id}
                 fontSizeClass={getFontSizeClass()}
+                enFontSizeClass={getEnFontSizeClass()}
                 lineHeightClass={getLineHeightClass()}
                 onCopy={handleCopySegment}
               />
@@ -433,8 +454,8 @@ const SubtitleWorkspaceComponent: React.FC<SubtitleWorkspaceProps> = ({
 
           {/* Currently Streaming Interim Segment */}
           {(currentInterimText || isTranslating) && (
-            <div className="relative p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-indigo-950/40 via-purple-950/30 to-slate-900/60 border border-indigo-500/40 shadow-lg shadow-indigo-500/10">
-              <div className="flex items-center justify-between mb-2">
+            <div className="relative p-3 sm:p-3.5 rounded-xl bg-gradient-to-r from-indigo-950/40 via-purple-950/30 to-slate-900/60 border border-indigo-500/40 shadow-lg shadow-indigo-500/10">
+              <div className="flex items-center justify-between mb-1.5">
                 <span className="flex items-center gap-1.5 text-xs font-semibold text-indigo-400">
                   <span className="relative flex h-2 w-2">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
@@ -445,8 +466,8 @@ const SubtitleWorkspaceComponent: React.FC<SubtitleWorkspaceProps> = ({
               </div>
 
               {viewMode === 'bilingual' && (currentInterimEn || smoothEn) && (
-                <div className="text-sm sm:text-base font-normal text-slate-400 mb-2 border-b border-indigo-900/40 pb-2">
-                  <span className="text-slate-400 font-semibold mr-1.5 uppercase text-xs">EN:</span>
+                <div className={`font-normal text-slate-400 mb-1.5 border-b border-indigo-900/40 pb-1.5 ${getEnFontSizeClass()}`}>
+                  <span className="text-slate-400 font-semibold mr-1.5 uppercase text-[11px]">EN:</span>
                   <span className="italic">{smoothEn}</span>
                 </div>
               )}
@@ -455,15 +476,15 @@ const SubtitleWorkspaceComponent: React.FC<SubtitleWorkspaceProps> = ({
                 className={`font-bold tracking-tight text-white ${getFontSizeClass()} ${getLineHeightClass()}`}
               >
                 {viewMode === 'bilingual' && (
-                  <span className="text-indigo-400 font-bold mr-2 uppercase text-xs inline-block align-middle">VI:</span>
+                  <span className="text-indigo-400 font-bold mr-1.5 uppercase text-[11px] inline-block align-middle">VI:</span>
                 )}
                 {smoothVi ? (
                   <>
                     <span className="live-shimmer-text">{smoothVi}</span>
-                    <span className="inline-block w-2.5 h-6 ml-1 bg-indigo-400 animate-pulse align-middle rounded-sm"></span>
+                    <span className="inline-block w-2.5 h-5 ml-1 bg-indigo-400 animate-pulse align-middle rounded-sm"></span>
                   </>
                 ) : (
-                  <span className="text-slate-400 italic text-sm font-normal">
+                  <span className="text-slate-400 italic text-xs sm:text-sm font-normal">
                     Đang lắng nghe giọng nói tiếng Anh...
                   </span>
                 )}

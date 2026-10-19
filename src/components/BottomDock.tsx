@@ -41,8 +41,8 @@ const BottomDockComponent: React.FC<BottomDockProps> = ({
   const isRunning = connectionState === 'listening' || connectionState === 'connecting' || connectionState === 'paused';
 
   return (
-    <footer className="sticky bottom-0 z-30 w-full backdrop-blur-xl bg-slate-950/85 border-t border-slate-800/80 pt-3 pb-5 transition-all">
-      <div className="max-w-4xl mx-auto px-4 flex flex-col items-center gap-3">
+    <footer className="sticky bottom-0 z-30 w-full backdrop-blur-xl bg-slate-950/85 border-t border-slate-800/80 pt-2.5 pb-4 transition-all">
+      <div className="max-w-4xl mx-auto px-4 flex flex-col items-center gap-2.5">
         
         {/* Controls Row */}
         <div className="w-full flex flex-wrap items-center justify-between gap-3">
@@ -135,7 +135,7 @@ const BottomDockComponent: React.FC<BottomDockProps> = ({
             <button
               type="button"
               onClick={onToggleStartStop}
-              className={`flex items-center gap-2.5 px-6 sm:px-8 py-3 sm:py-3.5 rounded-2xl font-bold text-sm sm:text-base tracking-wide transition-all shadow-xl active:scale-95 ${
+              className={`flex items-center gap-2.5 px-5 sm:px-7 py-2.5 sm:py-3 rounded-xl font-bold text-sm sm:text-base tracking-wide transition-all shadow-xl active:scale-95 ${
                 isRunning
                   ? 'bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white shadow-rose-600/30 border border-rose-400/30 animate-pulse-glow'
                   : 'bg-gradient-to-r from-emerald-500 via-teal-500 to-indigo-600 hover:from-emerald-400 hover:to-indigo-500 text-white shadow-emerald-500/25 border border-white/20'
