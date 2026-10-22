@@ -11,9 +11,21 @@ import {
   Sliders, 
   Trash2,
   Sparkles,
-  Activity
+  Activity,
+  Compass,
+  Code,
+  Briefcase,
+  GraduationCap,
+  MessageSquare
 } from 'lucide-react';
-import type { AppSettings, AudioDeviceOption, FontSizeOption, NoiseSuppressionLevel } from '../types';
+import type { 
+  AppSettings, 
+  AudioDeviceOption, 
+  FontSizeOption, 
+  NoiseSuppressionLevel,
+  TranslationTopic,
+  TranslationTone
+} from '../types';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -43,6 +55,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [showTimestamps, setShowTimestamps] = useState(settings.showTimestamps);
   const [filterFillerWords, setFilterFillerWords] = useState(settings.filterFillerWords ?? true);
   const [customGlossary, setCustomGlossary] = useState(settings.customGlossary || '');
+  const [translationTopic, setTranslationTopic] = useState<TranslationTopic>(settings.translationTopic || 'tech_dev');
+  const [translationTone, setTranslationTone] = useState<TranslationTone>(settings.translationTone || 'professional_conference');
   const [selectedDeviceId, setSelectedDeviceId] = useState(settings.selectedAudioDeviceId);
   const [noiseSuppressionLevel, setNoiseSuppressionLevel] = useState<NoiseSuppressionLevel>(settings.noiseSuppressionLevel || 'medium');
   const [enableVoiceCompressor, setEnableVoiceCompressor] = useState(settings.enableVoiceCompressor ?? true);
@@ -100,6 +114,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       showTimestamps,
       filterFillerWords,
       customGlossary: customGlossary.trim(),
+      translationTopic,
+      translationTone,
       selectedAudioDeviceId: selectedDeviceId,
       noiseSuppressionLevel,
       enableVoiceCompressor,
@@ -256,11 +272,72 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              {/* Option 1: Gemini 3.5 Live Translate Preview (OFFICIAL) */}
+              {/* Option 1: Gemini 3.8 Live (RECOMMENDED - NEXT GEN) */}
+              <label
+                className={`flex items-start gap-2.5 p-3.5 rounded-2xl border cursor-pointer transition-all sm:col-span-2 ${
+                  model === 'models/gemini-3.8-live'
+                    ? 'bg-gradient-to-r from-indigo-950/80 via-purple-950/70 to-indigo-950/80 border-indigo-500 ring-1 ring-indigo-500/50 text-white shadow-xl shadow-indigo-500/10'
+                    : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="model"
+                  value="models/gemini-3.8-live"
+                  checked={model === 'models/gemini-3.8-live'}
+                  onChange={(e) => setModel(e.target.value)}
+                  className="mt-1 text-indigo-600 focus:ring-indigo-500"
+                />
+                <div className="flex-1">
+                  <div className="font-bold text-sm flex items-center justify-between text-white">
+                    <span className="flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-indigo-400" />
+                      <span>Gemini 3.8 Live</span>
+                    </span>
+                    <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-semibold uppercase tracking-wide">
+                      Khuyên dùng (Next-Gen AI)
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-300 mt-1.5 leading-relaxed">
+                    Mô hình thời gian thực thế hệ 3.8 mới nhất của Google. Độ trễ cực thấp (&lt; 300ms), bộ nhớ ngữ cảnh <strong>131.072 tokens</strong>, hiểu trọn vẹn ngữ cảnh đàm thoại, thành ngữ và giữ nguyên thuật ngữ kỹ thuật.
+                  </p>
+                </div>
+              </label>
+
+              {/* Option 2: Gemini 3.8 Live Extended Thinking */}
               <label
                 className={`flex items-start gap-2.5 p-3 rounded-2xl border cursor-pointer transition-all sm:col-span-2 ${
+                  model === 'models/gemini-3.8-live-extended-thinking'
+                    ? 'bg-indigo-600/15 border-indigo-500 text-white ring-1 ring-indigo-500/40'
+                    : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="model"
+                  value="models/gemini-3.8-live-extended-thinking"
+                  checked={model === 'models/gemini-3.8-live-extended-thinking'}
+                  onChange={(e) => setModel(e.target.value)}
+                  className="mt-1 text-indigo-600 focus:ring-indigo-500"
+                />
+                <div className="flex-1">
+                  <div className="font-semibold text-xs flex items-center justify-between text-slate-200">
+                    <span>Gemini 3.8 Live Extended Thinking</span>
+                    <span className="text-[9px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 font-medium">
+                      Suy luận ngầm (Deep Reasoning)
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1 leading-snug">
+                    Bổ sung khả năng lập luận và phân tích sâu cấu trúc câu trước khi dịch, lý tưởng cho các buổi thuyết trình học thuật hoặc kỹ thuật hóc búa.
+                  </p>
+                </div>
+              </label>
+
+              {/* Option 3: Gemini 3.5 Live Translate Preview */}
+              <label
+                className={`flex items-start gap-2.5 p-3 rounded-2xl border cursor-pointer transition-all ${
                   model === 'models/gemini-3.5-live-translate-preview'
-                    ? 'bg-gradient-to-r from-indigo-950/70 to-purple-950/60 border-indigo-500 ring-1 ring-indigo-500/50 text-white shadow-lg shadow-indigo-500/10'
+                    ? 'bg-indigo-600/15 border-indigo-500 text-white'
                     : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
                 }`}
               >
@@ -272,49 +349,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   onChange={(e) => setModel(e.target.value)}
                   className="mt-1 text-indigo-600 focus:ring-indigo-500"
                 />
-                <div className="flex-1">
-                  <div className="font-bold text-sm flex items-center gap-2 text-white">
-                    <span>Gemini 3.5 Live Translate</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-semibold uppercase">
-                      Chính thức (Official)
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-300 mt-1">
-                    Model dịch giọng nói thời gian thực chuyên dụng của Google (gemini-3.5-live-translate-preview), tự động xuất phụ đề bản gốc (inputTranscription) và bản dịch (outputTranscription).
-                  </p>
-                </div>
-              </label>
-
-              {/* Option 2: Gemini 2.0 Flash Live */}
-              <label
-                className={`flex items-start gap-2.5 p-3 rounded-2xl border cursor-pointer transition-all ${
-                  model === 'models/gemini-2.0-flash-exp'
-                    ? 'bg-indigo-600/15 border-indigo-500 text-white'
-                    : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="model"
-                  value="models/gemini-2.0-flash-exp"
-                  checked={model === 'models/gemini-2.0-flash-exp'}
-                  onChange={(e) => setModel(e.target.value)}
-                  className="mt-1 text-indigo-600 focus:ring-indigo-500"
-                />
                 <div>
                   <div className="font-semibold text-xs text-slate-200">
-                    Gemini 2.0 Flash Live
+                    Gemini 3.5 Live Translate
                   </div>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
-                    Phiên bản Live Multimodal thế hệ 2.0.
+                  <p className="text-[11px] text-slate-400 mt-0.5 leading-snug">
+                    Bản preview dịch cabin trực tiếp trước đây.
                   </p>
                 </div>
               </label>
 
-              {/* Option 3: Custom Model */}
+              {/* Option 4: Custom Model */}
               <label
                 className={`flex items-start gap-2.5 p-3 rounded-2xl border cursor-pointer transition-all ${
-                  !['models/gemini-3.5-live-translate-preview', 'models/gemini-2.0-flash-exp'].includes(model)
+                  !['models/gemini-3.8-live', 'models/gemini-3.8-live-extended-thinking', 'models/gemini-3.5-live-translate-preview', 'models/gemini-2.0-flash-exp'].includes(model)
                     ? 'bg-indigo-600/15 border-indigo-500 text-white'
                     : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
                 }`}
@@ -323,15 +371,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   type="radio"
                   name="model"
                   value="custom"
-                  checked={!['models/gemini-3.5-live-translate-preview', 'models/gemini-2.0-flash-exp'].includes(model)}
-                  onChange={() => setModel('gemini-3.5-live-translate-preview')}
+                  checked={!['models/gemini-3.8-live', 'models/gemini-3.8-live-extended-thinking', 'models/gemini-3.5-live-translate-preview', 'models/gemini-2.0-flash-exp'].includes(model)}
+                  onChange={() => setModel('gemini-3.8-live')}
                   className="mt-1 text-indigo-600 focus:ring-indigo-500"
                 />
                 <div>
                   <div className="font-semibold text-xs text-slate-200">
                     Tùy chỉnh mã model
                   </div>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
+                  <p className="text-[11px] text-slate-400 mt-0.5 leading-snug">
                     Nhập tay bất kỳ mã model nào khác của Google.
                   </p>
                 </div>
@@ -339,7 +387,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
 
             {/* Custom Model Input Field */}
-            {!['models/gemini-3.5-live-translate-preview', 'models/gemini-2.0-flash-exp'].includes(model) && (
+            {!['models/gemini-3.8-live', 'models/gemini-3.8-live-extended-thinking', 'models/gemini-3.5-live-translate-preview', 'models/gemini-2.0-flash-exp'].includes(model) && (
               <div className="pt-2 animate-in fade-in">
                 <label className="text-[11px] text-slate-300 font-medium block mb-1">
                   Nhập mã model Gemini bạn muốn sử dụng:
@@ -349,19 +397,146 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     type="text"
                     value={model}
                     onChange={(e) => setModel(e.target.value)}
-                    placeholder="gemini-3.5-live-translate-preview"
+                    placeholder="gemini-3.8-live"
                     className="w-full bg-slate-950 border border-indigo-500/60 rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
                   />
                   <button
                     type="button"
-                    onClick={() => setModel('models/gemini-3.5-live-translate-preview')}
+                    onClick={() => setModel('models/gemini-3.8-live')}
                     className="text-[10px] px-2.5 py-2 bg-indigo-600 text-white font-semibold rounded-lg shrink-0"
                   >
-                    Dùng Gemini 3.5
+                    Dùng Gemini 3.8
                   </button>
                 </div>
               </div>
             )}
+          </div>
+
+          <div className="border-t border-slate-800/80 my-4" />
+
+          {/* Section: Translation Context & Tone */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-1.5">
+                <Compass className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Ngữ cảnh & Văn phong phiên dịch (Context & Tone)</span>
+              </label>
+              <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 font-medium">
+                Tăng độ sát nghĩa & tự nhiên
+              </span>
+            </div>
+
+            {/* Topic Selection */}
+            <div>
+              <label className="text-xs text-slate-300 font-medium block mb-2">
+                1. Chủ đề / Lĩnh vực đàm thoại (Domain Topic)
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {[
+                  {
+                    id: 'tech_dev' as const,
+                    icon: Code,
+                    title: 'Lập trình & Công nghệ IT',
+                    badge: 'Khuyên dùng',
+                    desc: 'Bảo tồn thuật ngữ chuẩn: API, backend, frontend, commit, deploy, bug, cache, refactor...',
+                  },
+                  {
+                    id: 'business_finance' as const,
+                    icon: Briefcase,
+                    title: 'Kinh doanh & Tài chính',
+                    badge: null,
+                    desc: 'Chuẩn hóa thuật ngữ kinh tế: doanh thu, biên lợi nhuận, KPI, ROI, dòng tiền, thị phần...',
+                  },
+                  {
+                    id: 'academic_science' as const,
+                    icon: GraduationCap,
+                    title: 'Khoa học & Học thuật',
+                    badge: null,
+                    desc: 'Văn phong nghiên cứu nghiêm cẩn, học thuật, định nghĩa khoa học chính xác.',
+                  },
+                  {
+                    id: 'general' as const,
+                    icon: MessageSquare,
+                    title: 'Giao tiếp hàng ngày',
+                    badge: null,
+                    desc: 'Đàm thoại thông dụng đời thường, tự nhiên, gần gũi, dễ hiểu.',
+                  },
+                ].map((item) => {
+                  const Icon = item.icon;
+                  const isSelected = translationTopic === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setTranslationTopic(item.id)}
+                      className={`p-3 rounded-2xl border text-left transition-all ${
+                        isSelected
+                          ? 'bg-gradient-to-r from-indigo-950/70 to-purple-950/60 border-indigo-500 ring-1 ring-indigo-500/50 shadow-md text-white'
+                          : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-1.5 font-bold text-xs text-slate-200">
+                          <Icon className={`w-3.5 h-3.5 ${isSelected ? 'text-indigo-400' : 'text-slate-400'}`} />
+                          <span>{item.title}</span>
+                        </div>
+                        {item.badge && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-semibold uppercase">
+                            {item.badge}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-400 leading-tight">
+                        {item.desc}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Tone & Pronouns Selection */}
+            <div>
+              <label className="text-xs text-slate-300 font-medium block mb-2">
+                2. Quy chuẩn xưng hô & Đại từ (Pronouns & Formality)
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {[
+                  {
+                    id: 'professional_conference' as const,
+                    title: 'Hội nghị & Trang trọng',
+                    desc: 'Tôi / Chúng tôi — Quý vị / Các bạn / Anh chị',
+                  },
+                  {
+                    id: 'friendly_colleague' as const,
+                    title: 'Đồng nghiệp & Nhóm',
+                    desc: 'Mình / Chúng ta — Bạn (Thân mật, hiện đại)',
+                  },
+                  {
+                    id: 'casual' as const,
+                    title: 'Đời thường tự nhiên',
+                    desc: 'Xưng hô tự nhiên, linh hoạt, gần gũi',
+                  },
+                ].map((item) => {
+                  const isSelected = translationTone === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setTranslationTone(item.id)}
+                      className={`p-2.5 rounded-2xl border text-left transition-all ${
+                        isSelected
+                          ? 'bg-indigo-600/20 border-indigo-500 text-white ring-1 ring-indigo-500/40 shadow-sm'
+                          : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
+                      }`}
+                    >
+                      <div className="text-xs font-bold text-slate-200">{item.title}</div>
+                      <div className="text-[10px] text-slate-400 mt-1 leading-snug">{item.desc}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
 
           <div className="border-t border-slate-800/80 my-4" />

@@ -25,6 +25,17 @@ export interface TranslationSegment {
 
 export type NoiseSuppressionLevel = 'off' | 'low' | 'medium' | 'high';
 
+export type TranslationTopic = 
+  | 'tech_dev' 
+  | 'business_finance' 
+  | 'academic_science' 
+  | 'general';
+
+export type TranslationTone = 
+  | 'professional_conference' 
+  | 'friendly_colleague' 
+  | 'casual';
+
 export interface AppSettings {
   apiKey: string;
   model: string;
@@ -43,6 +54,8 @@ export interface AppSettings {
   highContrast: boolean;
   filterFillerWords: boolean;
   customGlossary: string;
+  translationTopic: TranslationTopic;
+  translationTone: TranslationTone;
   noiseSuppressionLevel: NoiseSuppressionLevel;
   enableVoiceCompressor: boolean;
   enableSpeechClarityBoost: boolean;
@@ -50,8 +63,8 @@ export interface AppSettings {
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  apiKey: '',
-  model: 'models/gemini-3.5-live-translate-preview',
+  apiKey: (import.meta as any).env?.API_KEY || (import.meta as any).env?.VITE_GEMINI_API_KEY || '',
+  model: 'models/gemini-3.8-live',
   targetLanguageCode: 'vi',
   echoTargetLanguage: true,
   playAudioOutput: false,
@@ -67,6 +80,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   highContrast: false,
   filterFillerWords: true,
   customGlossary: '',
+  translationTopic: 'tech_dev',
+  translationTone: 'professional_conference',
   noiseSuppressionLevel: 'medium',
   enableVoiceCompressor: true,
   enableSpeechClarityBoost: true,

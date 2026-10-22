@@ -204,14 +204,15 @@ export function splitStreamingSentences(text: string): SplitResult {
 
   let pending = remaining.slice(lastIndex).trim();
 
-  // 4. Soft boundary fallback: Nếu câu pending quá dài (> 140 ký tự) không hề có dấu chấm,
-  // tìm dấu phẩy hoặc chấm phẩy để ngắt nhằm giữ kích thước card subtitle luôn gọn gàng
-  if (pending.length > 140) {
-    const commaIndex = pending.lastIndexOf(',', 120);
-    const semicolonIndex = pending.lastIndexOf(';', 120);
-    const splitPoint = Math.max(commaIndex, semicolonIndex);
+  // 4. Fallback an toàn cho câu nói liền mạch cực dài (> 280 ký tự) không hề có dấu chấm:
+  // Chỉ ngắt tại dấu chấm phẩy (;), gạch ngang (–), hoặc hai chấm (:) để bảo vệ các mệnh đề phụ có dấu phẩy.
+  if (pending.length > 280) {
+    const semicolonIndex = pending.lastIndexOf(';', 220);
+    const colonIndex = pending.lastIndexOf(':', 220);
+    const dashIndex = pending.lastIndexOf(' - ', 220);
+    const splitPoint = Math.max(semicolonIndex, colonIndex, dashIndex);
 
-    if (splitPoint >= 60 && pending.length - splitPoint >= 25) {
+    if (splitPoint >= 100 && pending.length - splitPoint >= 40) {
       const longPart = pending.slice(0, splitPoint + 1).trim();
       const nextPending = pending.slice(splitPoint + 1).trim();
       if (longPart.length > 0 && nextPending.length > 0) {
@@ -283,6 +284,104 @@ export function splitBilingualStream(viText: string, enText?: string): Bilingual
     completedPairs,
     pendingVi,
     pendingEn: pendingEn || undefined,
+  };
+}
+
+// Regex nhận diện liên từ nối câu ở đầu câu (Conjunctions indicating continuation of previous thought)
+const VI_CONJUNCTION_PREFIX_REGEX = /^(?:và|nhưng|mà|bởi vì|vì vậy|do đó|cho nên|tuy nhiên|đồng thời|cũng như|thay vì|nghĩa là|tức là|nên là|để mà|hoặc là|hay là|thế nên|vậy nên|mặt khác)\b/i;
+const EN_CONJUNCTION_PREFIX_REGEX = /^(?:and|but|because|so|which|that|although|even though|meanwhile|whereas|therefore|however|furthermore|moreover)\b/i;
+
+/**
+ * Kiểm tra xem một segment mới có nên được sáp nhập (stitch) vào segment ngay trước nó hay không.
+ * Giúp giải quyết triệt để tình trạng câu dịch bị xé nhỏ, đứt gãy giữa chừng do khoảng dừng âm lượng.
+ */
+export function shouldStitchWithPrevious(
+  prevVi: string,
+  incomingVi: string,
+  prevEn?: string,
+  incomingEn?: string
+): boolean {
+  if (!prevVi || !incomingVi) return false;
+
+  const trimmedPrevVi = prevVi.trim();
+  const trimmedIncomingVi = incomingVi.trim();
+
+  // Đảm bảo sau khi ghép tổng độ dài không bị quá khổ (> 300 ký tự)
+  if (trimmedPrevVi.length + trimmedIncomingVi.length > 300) {
+    return false;
+  }
+
+  // Điều kiện 1: Câu trước kết thúc dở dang, KHÔNG có dấu kết thúc (. ? ! ...)
+  const prevEndsWithoutPunctuation = !/[.?!…]["')\]}]*$/.test(trimmedPrevVi);
+  if (prevEndsWithoutPunctuation) {
+    return true;
+  }
+
+  // Kiểm tra nếu câu tiếng Anh trước đó cũng chưa có dấu kết thúc câu
+  if (prevEn && !/[.?!…]["')\]}]*$/.test(prevEn.trim())) {
+    return true;
+  }
+
+  // Điều kiện 2: Câu mới bắt đầu bằng chữ thường (dấu hiệu rõ ràng của việc nối vế câu tiếp theo)
+  if (/^[a-zà-ỹ]/.test(trimmedIncomingVi)) {
+    return true;
+  }
+
+  // Điều kiện 3: Câu mới bắt đầu bằng liên từ nối ý tiếng Việt (kể cả khi viết hoa đầu câu do LLM format)
+  if (VI_CONJUNCTION_PREFIX_REGEX.test(trimmedIncomingVi) && trimmedPrevVi.length < 220) {
+    return true;
+  }
+
+  // Điều kiện 4: Câu gốc tiếng Anh mới bắt đầu bằng liên từ nối hoặc chữ thường
+  if (incomingEn) {
+    const trimmedIncomingEn = incomingEn.trim();
+    if (/^[a-z]/.test(trimmedIncomingEn) || EN_CONJUNCTION_PREFIX_REGEX.test(trimmedIncomingEn)) {
+      if (trimmedPrevVi.length < 220) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Hợp nhất (Stitch) 2 cặp câu (VI - EN) thành một câu hoàn chỉnh liền mạch
+ */
+export function stitchBilingualPair(
+  prev: BilingualPair,
+  incoming: BilingualPair
+): BilingualPair {
+  let prevVi = prev.vi.trim();
+  let incomingVi = incoming.vi.trim();
+
+  // Hạ chữ cái đầu tiên của câu sau nếu câu trước không có dấu chấm câu hoặc kết thúc bằng dấu phẩy
+  if (!/[.?!…]$/.test(prevVi) && /^[A-ZÀ-Ỹ]/.test(incomingVi)) {
+    // Nếu bắt đầu bằng liên từ (Và, Nhưng, Mà...) -> chuyển thành chữ thường khi nối
+    if (VI_CONJUNCTION_PREFIX_REGEX.test(incomingVi)) {
+      incomingVi = incomingVi.charAt(0).toLowerCase() + incomingVi.slice(1);
+    }
+  }
+
+  const stitchedVi = `${prevVi} ${incomingVi}`.replace(/\s+/g, ' ').trim();
+
+  let stitchedEn: string | undefined = undefined;
+  if (prev.en || incoming.en) {
+    const prevEn = (prev.en || '').trim();
+    let incEn = (incoming.en || '').trim();
+
+    if (!/[.?!…]$/.test(prevEn) && /^[A-Z]/.test(incEn) && EN_CONJUNCTION_PREFIX_REGEX.test(incEn)) {
+      incEn = incEn.charAt(0).toLowerCase() + incEn.slice(1);
+    }
+
+    stitchedEn = prevEn && incEn 
+      ? `${prevEn} ${incEn}`.replace(/\s+/g, ' ').trim() 
+      : prevEn || incEn;
+  }
+
+  return {
+    vi: stitchedVi,
+    en: stitchedEn,
   };
 }
 

@@ -1,3 +1,5 @@
+import type { TranslationTopic, TranslationTone } from '../types';
+
 export interface GeminiLiveCallbacks {
   onOpen: () => void;
   onSetupComplete: () => void;
@@ -18,6 +20,85 @@ export interface GeminiLiveConfig {
   filterFillerWords?: boolean;
   playAudioOutput?: boolean;
   customGlossary?: string;
+  translationTopic?: TranslationTopic;
+  translationTone?: TranslationTone;
+}
+
+/**
+ * Xây dựng System Instruction chuyên sâu, tiêm ngữ cảnh lĩnh vực (Domain/Topic)
+ * và đại từ xưng hô (Pronoun/Tone) để loại bỏ hiện tượng dịch thô và rời rạc.
+ */
+function buildTranslationSystemInstruction(config: GeminiLiveConfig): string {
+  const targetLang = config.targetLanguageCode || 'vi';
+  const topic = config.translationTopic || 'tech_dev';
+  const tone = config.translationTone || 'professional_conference';
+
+  const instructions: string[] = [
+    `You are an elite simultaneous conference interpreter translating live speech into natural, fluent, and idiomatic Vietnamese (${targetLang}).`,
+  ];
+
+  // 1. Quy chuẩn đại từ & Văn phong xưng hô (Pronoun & Tone Matrix)
+  if (tone === 'friendly_colleague') {
+    instructions.push(
+      `TONE & PRONOUNS: Friendly, collaborative colleague style. Refer to speaker as 'mình', listener/team as 'bạn' or 'chúng ta'. Natural, engaging, and modern conversational tone.`
+    );
+  } else if (tone === 'casual') {
+    instructions.push(
+      `TONE & PRONOUNS: Casual, natural everyday Vietnamese phrasing. Direct, friendly, and easy to follow.`
+    );
+  } else {
+    // Default: 'professional_conference'
+    instructions.push(
+      `TONE & PRONOUNS: Formal, professional conference standard. Address audience respectfully as 'quý vị', 'các bạn', or 'anh/chị'. Refer to speaker as 'tôi' (singular) or 'chúng tôi' (plural/team). Maintain an articulate, authoritative, and polite style.`
+    );
+  }
+
+  // 2. Định hướng chuyên môn theo Chủ đề (Domain & Jargon Preservation)
+  if (topic === 'tech_dev') {
+    instructions.push(
+      `DOMAIN & TERMINOLOGY: Information Technology, Software Engineering, AI & Computer Science.\n` +
+      `CRITICAL RULE: Keep standard industry English terms unchanged rather than using awkward or confusing literal Vietnamese translations. Examples to preserve in English: API, frontend, backend, server, cloud, database, deploy, commit, merge, pull request, bug, issue, cache, thread, async, latency, microservices, pipeline, framework, token, model, prompt, benchmark, UI/UX, dev, refactor, stack. Translate natural concepts idiomatically (e.g. 'ship a feature' -> 'ra mắt tính năng', 'production ready' -> 'sẵn sàng vận hành thực tế').`
+    );
+  } else if (topic === 'business_finance') {
+    instructions.push(
+      `DOMAIN & TERMINOLOGY: Business, Economics, Startup & Corporate Finance.\n` +
+      `Use precise, standard Vietnamese business terminology: 'revenue' -> 'doanh thu', 'operating margin' -> 'biên lợi nhuận hoạt động', 'market share' -> 'thị phần', 'cash flow' -> 'dòng tiền', 'runway' -> 'thời gian sống của quỹ/runway', 'valuation' -> 'định giá', 'stakeholders' -> 'các bên liên quan'.`
+    );
+  } else if (topic === 'academic_science') {
+    instructions.push(
+      `DOMAIN & TERMINOLOGY: Academic Research, Science & Higher Education.\n` +
+      `Maintain rigorous academic phrasing, scholarly precision, and formal objective discourse.`
+    );
+  } else {
+    instructions.push(
+      `DOMAIN & TERMINOLOGY: General conversational and modern topic discourse. Translate naturally and idiomatically.`
+    );
+  }
+
+  // 3. Nguyên tắc liên kết ý và ngữ nghĩa trọn vẹn (Semantic Cohesion)
+  instructions.push(
+    `SEMANTIC COHESION & FLOW: Connect thoughts smoothly across speech pauses. Translate full semantic clauses into complete, cohesive Vietnamese sentences rather than fragmented, literal word-by-word chunks. Ensure subject-verb agreement and logical continuity.`
+  );
+
+  // 4. Lọc từ đệm và tiếng ngập ngừng (Speech Disfluencies)
+  if (config.filterFillerWords !== false) {
+    instructions.push(
+      `SPEECH DISFLUENCY: Filter out verbal fillers, hesitations, repetitive stutters, and non-lexical vocalizations (e.g. 'um', 'uh', 'er', 'ah', 'like', 'you know', 'ừm', 'ờ', 'à', 'thì là'). Output only clear, meaningful semantic content.`
+    );
+  }
+
+  // 5. Từ vựng riêng do người dùng định nghĩa (Custom Glossary)
+  if (config.customGlossary && config.customGlossary.trim()) {
+    instructions.push(
+      `CUSTOM GLOSSARY & NAMES: Strictly prioritize accurate rendering of these user-provided names, brands, or domain phrases: ${config.customGlossary.trim()}`
+    );
+  }
+
+  instructions.push(
+    `OUTPUT CONSTRAINT: Output ONLY the translated speech and text into target language. Do not converse, comment, or explain.`
+  );
+
+  return instructions.join('\n\n');
 }
 
 export class GeminiLiveClient {
@@ -82,9 +163,13 @@ export class GeminiLiveClient {
 
         // Gemini Live setup message configuration
         const isTranslateModel = formattedModel.includes('live-translate');
+        const isGemini38 = formattedModel.includes('gemini-3.8');
 
+        // BidiGenerateContent trên Gemini Live API bắt buộc responseModalities phải là ['AUDIO'].
+        // Bản dịch văn bản được Google tự động stream song song qua outputAudioTranscription
+        // và inputAudioTranscription cho bản gốc.
         const generationConfig: Record<string, any> = {
-          responseModalities: isTranslateModel || config.playAudioOutput ? ['AUDIO'] : ['TEXT'],
+          responseModalities: ['AUDIO'],
         };
 
         if (isTranslateModel) {
@@ -94,14 +179,12 @@ export class GeminiLiveClient {
           };
         }
 
-        let systemPrompt = config.filterFillerWords !== false
-          ? `You are an expert simultaneous conference interpreter. Listen to the user's speech and translate it immediately into target language: ${targetLang}. Crucial instruction: Filter out verbal fillers, hesitations, repetitive stutters, and non-lexical vocalizations (e.g. 'um', 'uh', 'er', 'ah', 'like', 'you know', 'ừm', 'ờ', 'à'). Translate only the clear, meaningful semantic content. Do not chat or converse.`
-          : `You are a real-time speech translator. Listen to the user's speech and translate it immediately into target language: ${targetLang}. Only output the translated speech and text. Do not reply or converse.`;
+        const systemPrompt = buildTranslationSystemInstruction(config);
 
-        // Inject custom user glossary / domain vocabulary if present
-        if (config.customGlossary && config.customGlossary.trim()) {
-          systemPrompt += `\nPrioritize accurate translation of these specialized glossary terms, names, or dialect phrases: ${config.customGlossary.trim()}`;
-        }
+        // Với Gemini 3.8 Live (hỗ trợ context lên đến 131.072 tokens):
+        // Nâng ngưỡng trigger lên 30.000 tokens và sliding window 15.000 tokens để ghi nhớ ngữ cảnh đàm thoại sâu gấp 3 lần.
+        const triggerTokens = isGemini38 ? 30000 : 10000;
+        const targetTokens = isGemini38 ? 15000 : 5000;
 
         const setupMessage: Record<string, any> = {
           setup: {
@@ -110,12 +193,10 @@ export class GeminiLiveClient {
             systemInstruction: {
               parts: [{ text: systemPrompt }],
             },
-            // Context Window Compression: Ngăn chặn phình ngữ cảnh (context bloat) và duy trì độ trễ thấp (<400ms)
-            // khi cuộc hội thoại kéo dài > 5 phút.
             contextWindowCompression: {
-              triggerTokens: 10000,
+              triggerTokens,
               slidingWindow: {
-                targetTokens: 5000,
+                targetTokens,
               },
             },
             inputAudioTranscription: {},
@@ -210,10 +291,11 @@ export class GeminiLiveClient {
           return;
         }
 
-        // Kiểm tra lỗi xác thực hoặc cấm quyền (không thể tự reconnect nếu key sai)
-        const isAuthError = event.code === 1008 || event.code === 4003 || event.code === 400;
-        if (isAuthError) {
-          this.callbacks.onError(new Error(`API Key không hợp lệ hoặc model chưa được cấp quyền (Code ${event.code}).`));
+        // Kiểm tra lỗi xác thực, cấu hình hoặc cấm quyền (không thể tự reconnect nếu key sai hoặc model sai tham số)
+        const isFatalError = event.code === 1008 || event.code === 1007 || event.code === 4003 || event.code === 400;
+        if (isFatalError) {
+          const reason = event.reason || `Mã lỗi ${event.code}`;
+          this.callbacks.onError(new Error(`Lỗi cấu hình hoặc API Key không hợp lệ: ${reason}`));
           this.callbacks.onClose(event);
           return;
         }
