@@ -41,136 +41,120 @@ const BottomDockComponent: React.FC<BottomDockProps> = ({
   const isRunning = connectionState === 'listening' || connectionState === 'connecting' || connectionState === 'paused';
 
   return (
-    <footer className="sticky bottom-0 z-30 w-full backdrop-blur-xl bg-slate-950/85 border-t border-slate-800/80 pt-2.5 pb-4 transition-all">
-      <div className="max-w-4xl mx-auto px-4 flex flex-col items-center gap-2.5">
+    <div className="fixed bottom-3 sm:bottom-4 left-1/2 -translate-x-1/2 z-30 pointer-events-auto">
+      <div className="flex items-center gap-2 p-1.5 sm:p-2 bg-slate-950/90 backdrop-blur-2xl border border-slate-750/90 rounded-full shadow-2xl shadow-black/60 ring-1 ring-white/10 transition-all">
         
-        {/* Controls Row */}
-        <div className="w-full flex flex-wrap items-center justify-between gap-3">
-          
-          {/* Left: Audio Source & Device Select */}
-          <div className="flex items-center gap-2">
-            {/* Audio Source Switcher: Mic vs System */}
-            <div className="flex items-center p-1 bg-slate-900/90 border border-slate-800 rounded-xl">
-              <button
-                type="button"
-                disabled={isRunning}
-                onClick={() => onAudioSourceTypeChange('microphone')}
-                title="Thu âm từ microphone máy tính"
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  audioSourceType === 'microphone'
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
-                } ${isRunning ? 'cursor-not-allowed opacity-75' : ''}`}
-              >
-                <Mic className="w-3.5 h-3.5" />
-                <span>Micro</span>
-              </button>
-              <button
-                type="button"
-                disabled={isRunning}
-                onClick={() => onAudioSourceTypeChange('system')}
-                title="Thu âm từ tab hoặc âm thanh máy tính (Zoom, Meet, YouTube)"
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  audioSourceType === 'system'
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
-                } ${isRunning ? 'cursor-not-allowed opacity-75' : ''}`}
-              >
-                <Monitor className="w-3.5 h-3.5" />
-                <span>Âm thanh họp/tab</span>
-              </button>
-            </div>
-
-            {/* Mic device dropdown (if microphone source) */}
-            {audioSourceType === 'microphone' && availableDevices.length > 0 && (
-              <div className="relative hidden md:block">
-                <select
-                  disabled={isRunning}
-                  value={selectedDeviceId}
-                  onChange={(e) => onSelectDevice(e.target.value)}
-                  className="appearance-none text-xs bg-slate-900/90 border border-slate-800 text-slate-300 rounded-xl px-3 py-2 pr-7 max-w-[200px] truncate focus:outline-none focus:border-indigo-500 disabled:opacity-60"
-                >
-                  {availableDevices.map((d) => (
-                    <option key={d.deviceId} value={d.deviceId}>
-                      {d.label}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-              </div>
-            )}
-
-            {/* Noise suppression level badge & quick settings access */}
-            {onOpenSettings && (
-              <button
-                type="button"
-                onClick={onOpenSettings}
-                title="Cấu hình bộ lọc khử nhiễu & tăng cường giọng nói DSP"
-                className="hidden lg:flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-800 text-slate-300 text-xs transition-colors"
-              >
-                <Activity className="w-3.5 h-3.5 text-indigo-400" />
-                <span className="text-slate-400">Lọc ồn:</span>
-                <span className={`font-semibold ${noiseSuppressionLevel === 'off' ? 'text-slate-500' : 'text-indigo-300'}`}>
-                  {noiseSuppressionLevel === 'high' ? 'Mạnh' : noiseSuppressionLevel === 'low' ? 'Nhẹ' : noiseSuppressionLevel === 'off' ? 'Tắt' : 'Tiêu chuẩn'}
-                </span>
-              </button>
-            )}
-          </div>
-
-          {/* Center: Main Start / Stop Button */}
-          <div className="flex items-center gap-3 mx-auto sm:mx-0">
-            {/* Pause button (only while running) */}
-            {isRunning && (
-              <button
-                type="button"
-                onClick={onTogglePause}
-                title={isPaused ? 'Tiếp tục dịch' : 'Tạm dừng thu âm'}
-                className="p-3 rounded-2xl bg-slate-850 hover:bg-slate-800 text-amber-400 border border-amber-500/30 hover:border-amber-500/50 transition-all shadow-md"
-              >
-                {isPaused ? <Play className="w-5 h-5 fill-current" /> : <Pause className="w-5 h-5 fill-current" />}
-              </button>
-            )}
-
-            {/* Big Action Button */}
-            <button
-              type="button"
-              onClick={onToggleStartStop}
-              className={`flex items-center gap-2.5 px-5 sm:px-7 py-2.5 sm:py-3 rounded-xl font-bold text-sm sm:text-base tracking-wide transition-all shadow-xl active:scale-95 ${
-                isRunning
-                  ? 'bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white shadow-rose-600/30 border border-rose-400/30 animate-pulse-glow'
-                  : 'bg-gradient-to-r from-emerald-500 via-teal-500 to-indigo-600 hover:from-emerald-400 hover:to-indigo-500 text-white shadow-emerald-500/25 border border-white/20'
-              }`}
-            >
-              {isRunning ? (
-                <>
-                  <Square className="w-5 h-5 fill-current" />
-                  <span>Dừng phiên dịch</span>
-                </>
-              ) : (
-                <>
-                  <Mic className="w-5 h-5" />
-                  <span>Bắt đầu dịch trực tiếp</span>
-                </>
-              )}
-            </button>
-          </div>
-
-          {/* Right: Security & Privacy Notice */}
-          <div className="flex items-center gap-1.5 text-[11px] text-slate-400 max-w-[240px] text-right ml-auto hidden sm:flex">
-            <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span>Chỉ truy cập audio khi bạn bấm bắt đầu. Dừng ngay lập tức.</span>
-          </div>
-
+        {/* Audio Source Switcher: Mic vs Tab */}
+        <div className="flex items-center p-0.5 bg-slate-900/90 rounded-full border border-slate-800/80">
+          <button
+            type="button"
+            disabled={isRunning}
+            onClick={() => onAudioSourceTypeChange('microphone')}
+            title="Thu âm từ Microphone máy tính"
+            className={`p-1.5 sm:px-2.5 sm:py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all ${
+              audioSourceType === 'microphone'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-slate-400 hover:text-slate-200'
+            } ${isRunning ? 'cursor-not-allowed opacity-60' : ''}`}
+          >
+            <Mic className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Micro</span>
+          </button>
+          <button
+            type="button"
+            disabled={isRunning}
+            onClick={() => onAudioSourceTypeChange('system')}
+            title="Thu âm Tab họp hoặc âm thanh máy tính (Zoom, Meet, YouTube)"
+            className={`p-1.5 sm:px-2.5 sm:py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all ${
+              audioSourceType === 'system'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-slate-400 hover:text-slate-200'
+            } ${isRunning ? 'cursor-not-allowed opacity-60' : ''}`}
+          >
+            <Monitor className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Tab họp</span>
+          </button>
         </div>
 
-        {/* Small screen disclaimer */}
-        <div className="sm:hidden text-center text-[10px] text-slate-400 flex items-center justify-center gap-1">
-          <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Bảo mật: Âm thanh không lưu trữ trên máy chủ ngoài.</span>
+        {/* Mic device dropdown (if multiple devices) */}
+        {audioSourceType === 'microphone' && availableDevices.length > 1 && (
+          <div className="relative hidden xl:block">
+            <select
+              disabled={isRunning}
+              value={selectedDeviceId}
+              onChange={(e) => onSelectDevice(e.target.value)}
+              className="appearance-none text-xs bg-slate-900/90 border border-slate-800 text-slate-300 rounded-full px-2.5 py-1 pr-6 max-w-[150px] truncate focus:outline-none focus:border-indigo-500 disabled:opacity-60"
+            >
+              {availableDevices.map((d) => (
+                <option key={d.deviceId} value={d.deviceId}>
+                  {d.label}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="w-3 h-3 text-slate-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+          </div>
+        )}
+
+        {/* Pause button (while running) */}
+        {isRunning && (
+          <button
+            type="button"
+            onClick={onTogglePause}
+            title={isPaused ? 'Tiếp tục dịch' : 'Tạm dừng thu âm'}
+            className="p-2 sm:p-2.5 rounded-full bg-slate-850 hover:bg-slate-800 text-amber-400 border border-amber-500/30 transition-all shadow-md active:scale-95"
+          >
+            {isPaused ? <Play className="w-4 h-4 fill-current" /> : <Pause className="w-4 h-4 fill-current" />}
+          </button>
+        )}
+
+        {/* Main Action Button */}
+        <button
+          type="button"
+          onClick={onToggleStartStop}
+          className={`flex items-center gap-2 px-4 sm:px-6 py-2 sm:py-2.5 rounded-full font-bold text-xs sm:text-sm tracking-wide transition-all shadow-lg active:scale-95 ${
+            isRunning
+              ? 'bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white shadow-rose-600/30 border border-rose-400/30 animate-pulse'
+              : 'bg-gradient-to-r from-emerald-500 via-teal-500 to-indigo-600 hover:brightness-110 text-white shadow-emerald-500/25 border border-white/20'
+          }`}
+        >
+          {isRunning ? (
+            <>
+              <Square className="w-3.5 h-3.5 fill-current" />
+              <span>Dừng dịch</span>
+            </>
+          ) : (
+            <>
+              <Mic className="w-3.5 h-3.5" />
+              <span>Bắt đầu dịch trực tiếp</span>
+            </>
+          )}
+        </button>
+
+        {/* Quick DSP / Noise level */}
+        {onOpenSettings && (
+          <button
+            type="button"
+            onClick={onOpenSettings}
+            title={`Lọc ồn: ${noiseSuppressionLevel === 'high' ? 'Mạnh' : noiseSuppressionLevel === 'low' ? 'Nhẹ' : noiseSuppressionLevel === 'off' ? 'Tắt' : 'Tiêu chuẩn'} - Bấm để tùy chỉnh DSP`}
+            className="hidden lg:flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-900/90 hover:bg-slate-800 border border-slate-800 text-slate-300 text-xs transition-colors"
+          >
+            <Activity className="w-3 h-3 text-indigo-400" />
+            <span className="text-[11px] text-slate-400 font-medium">
+              {noiseSuppressionLevel === 'off' ? 'Tắt lọc ồn' : 'DSP Lọc ồn'}
+            </span>
+          </button>
+        )}
+
+        {/* Privacy Shield Tooltip */}
+        <div 
+          title="Bảo mật: Âm thanh chỉ truy cập trực tiếp khi bạn bật, hoàn toàn không lưu trữ trên máy chủ bên thứ ba." 
+          className="p-1.5 text-emerald-400/80 hover:text-emerald-400 cursor-help transition-colors hidden sm:block"
+        >
+          <ShieldCheck className="w-4 h-4" />
         </div>
 
       </div>
-    </footer>
+    </div>
   );
 };
 

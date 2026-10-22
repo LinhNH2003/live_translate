@@ -11,7 +11,6 @@ import { GeminiLiveClient } from './services/geminiLiveClient';
 import { DemoSimulator } from './services/demoSimulator';
 import { VadService } from './services/vadService';
 import { Header } from './components/Header';
-import { LanguageBar } from './components/LanguageBar';
 import { SubtitleWorkspace } from './components/SubtitleWorkspace';
 import { BottomDock } from './components/BottomDock';
 import { SettingsModal } from './components/SettingsModal';
@@ -198,11 +197,11 @@ export function App() {
 
       if (!finalVi && !finalEn) continue;
 
-      const pauseDiffSec = Math.round((now - lastTurnTimeRef.current) / 1000);
+      const pauseDiffSec = lastTurnTimeRef.current > 0 ? Math.round((now - lastTurnTimeRef.current) / 1000) : 0;
       lastTurnTimeRef.current = now;
 
       // Tự động chèn Pause Marker nếu khoảng nghỉ trước câu này >= 12 giây
-      if (pauseDiffSec >= 12 && allSegmentsRef.current.length > 0 && newItems.length === 0) {
+      if (pauseDiffSec >= 12 && pauseDiffSec < 86400 && allSegmentsRef.current.length > 0 && newItems.length === 0) {
         newItems.push({
           id: `pause_${now}_${Math.random().toString(36).substring(2, 6)}`,
           timestamp: now,
@@ -601,7 +600,7 @@ export function App() {
   }, []);
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#0b0f19] text-slate-100 transition-colors selection:bg-indigo-500/30">
+    <div className="h-screen flex flex-col bg-[#0b0f19] text-slate-100 transition-colors selection:bg-indigo-500/30 overflow-hidden">
       
       {/* Top Header */}
       <Header
@@ -615,12 +614,7 @@ export function App() {
         theme={settings.theme}
         onToggleTheme={handleToggleTheme}
         errorMessage={errorMessage || undefined}
-      />
-
-      {/* Language Indicator Bar */}
-      <LanguageBar
         audioSourceType={settings.audioSourceType}
-        isActive={connectionState === 'listening'}
       />
 
       {/* No API Key Notice Banner */}
