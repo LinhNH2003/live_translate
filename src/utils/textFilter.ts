@@ -204,15 +204,15 @@ export function splitStreamingSentences(text: string): SplitResult {
 
   let pending = remaining.slice(lastIndex).trim();
 
-  // 4. Fallback an toàn cho câu nói liền mạch cực dài (> 280 ký tự) không hề có dấu chấm:
-  // Chỉ ngắt tại dấu chấm phẩy (;), gạch ngang (–), hoặc hai chấm (:) để bảo vệ các mệnh đề phụ có dấu phẩy.
-  if (pending.length > 280) {
-    const semicolonIndex = pending.lastIndexOf(';', 220);
-    const colonIndex = pending.lastIndexOf(':', 220);
-    const dashIndex = pending.lastIndexOf(' - ', 220);
-    const splitPoint = Math.max(semicolonIndex, colonIndex, dashIndex);
+  // 4. Soft boundary fallback: nếu câu pending quá dài (> 200 ký tự) không hề có dấu chấm,
+  // ngắt tại dấu phẩy để chữ hiện ra sớm. Mệnh đề phụ bị cắt ra sẽ được
+  // shouldStitchWithPrevious() ghép lại nếu thực sự là vế nối.
+  if (pending.length > 200) {
+    const commaIndex = pending.lastIndexOf(',', 140);
+    const semicolonIndex = pending.lastIndexOf(';', 140);
+    const splitPoint = Math.max(commaIndex, semicolonIndex);
 
-    if (splitPoint >= 100 && pending.length - splitPoint >= 40) {
+    if (splitPoint >= 80 && pending.length - splitPoint >= 30) {
       const longPart = pending.slice(0, splitPoint + 1).trim();
       const nextPending = pending.slice(splitPoint + 1).trim();
       if (longPart.length > 0 && nextPending.length > 0) {
@@ -311,38 +311,21 @@ export function shouldStitchWithPrevious(
     return false;
   }
 
-  // Điều kiện 1: Câu trước kết thúc dở dang, KHÔNG có dấu kết thúc (. ? ! ...)
-  const prevEndsWithoutPunctuation = !/[.?!…]["')\]}]*$/.test(trimmedPrevVi);
-  if (prevEndsWithoutPunctuation) {
-    return true;
-  }
+  // Tín hiệu tiếp nối rõ ràng: câu mới bắt đầu bằng chữ thường hoặc liên từ nối
+  const incomingLowerVi = /^[a-zà-ỹ]/.test(trimmedIncomingVi);
+  const incomingConjunctionVi =
+    trimmedPrevVi.length < 220 &&
+    (VI_CONJUNCTION_PREFIX_REGEX.test(trimmedIncomingVi) ||
+      (incomingEn ? EN_CONJUNCTION_PREFIX_REGEX.test(incomingEn.trim()) : false));
+  const hasContinuationSignal = incomingLowerVi || incomingConjunctionVi;
+  if (!hasContinuationSignal) return false;
 
-  // Kiểm tra nếu câu tiếng Anh trước đó cũng chưa có dấu kết thúc câu
-  if (prevEn && !/[.?!…]["')\]}]*$/.test(prevEn.trim())) {
-    return true;
-  }
+  // Chỉ stitch khi câu trước chưa khép (thiếu dấu kết thúc . ? ! ...) —
+  // câu trước đã hoàn chỉnh thì để câu mới thành card riêng (hiện chữ ngay, không ghim chờ).
+  const prevViOpen = !/[.?!…]["')\]}]*$/.test(trimmedPrevVi);
+  const prevEnOpen = !!prevEn && !/[.?!…]["')\]}]*$/.test(prevEn.trim());
 
-  // Điều kiện 2: Câu mới bắt đầu bằng chữ thường (dấu hiệu rõ ràng của việc nối vế câu tiếp theo)
-  if (/^[a-zà-ỹ]/.test(trimmedIncomingVi)) {
-    return true;
-  }
-
-  // Điều kiện 3: Câu mới bắt đầu bằng liên từ nối ý tiếng Việt (kể cả khi viết hoa đầu câu do LLM format)
-  if (VI_CONJUNCTION_PREFIX_REGEX.test(trimmedIncomingVi) && trimmedPrevVi.length < 220) {
-    return true;
-  }
-
-  // Điều kiện 4: Câu gốc tiếng Anh mới bắt đầu bằng liên từ nối hoặc chữ thường
-  if (incomingEn) {
-    const trimmedIncomingEn = incomingEn.trim();
-    if (/^[a-z]/.test(trimmedIncomingEn) || EN_CONJUNCTION_PREFIX_REGEX.test(trimmedIncomingEn)) {
-      if (trimmedPrevVi.length < 220) {
-        return true;
-      }
-    }
-  }
-
-  return false;
+  return prevViOpen || prevEnOpen;
 }
 
 /**

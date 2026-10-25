@@ -294,12 +294,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <Sparkles className="w-4 h-4 text-indigo-400" />
                       <span>Gemini 3.8 Live</span>
                     </span>
-                    <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-semibold uppercase tracking-wide">
-                      Khuyên dùng (Next-Gen AI)
-                    </span>
                   </div>
                   <p className="text-xs text-slate-300 mt-1.5 leading-relaxed">
-                    Mô hình thời gian thực thế hệ 3.8 mới nhất của Google. Độ trễ cực thấp (&lt; 300ms), bộ nhớ ngữ cảnh <strong>131.072 tokens</strong>, hiểu trọn vẹn ngữ cảnh đàm thoại, thành ngữ và giữ nguyên thuật ngữ kỹ thuật.
+                    Mô hình thời gian thực thế hệ 3.8 đa năng của Google. Chỉ ra text sau khi câu nói kết thúc (không stream dần khi đang nói), phù hợp đoạn thoại rời rạc hơn là phụ đề trực tiếp.
                   </p>
                 </div>
               </label>
@@ -350,11 +347,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   className="mt-1 text-indigo-600 focus:ring-indigo-500"
                 />
                 <div>
-                  <div className="font-semibold text-xs text-slate-200">
-                    Gemini 3.5 Live Translate
+                  <div className="font-semibold text-xs flex items-center justify-between gap-2 text-slate-200">
+                    <span>Gemini 3.5 Live Translate</span>
+                    <span className="shrink-0 text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-semibold uppercase tracking-wide">
+                      Chuyên dịch cabin (khuyên dùng)
+                    </span>
                   </div>
                   <p className="text-[11px] text-slate-400 mt-0.5 leading-snug">
-                    Bản preview dịch cabin trực tiếp trước đây.
+                    Model dịch cabin trực tiếp chuyên dụng của Google: tự động xuất phụ đề bản gốc (inputTranscription) và bản dịch (outputTranscription) ngay khi đang nói, độ trễ thấp nhất.
                   </p>
                 </div>
               </label>

@@ -64,7 +64,7 @@ export interface AppSettings {
 
 export const DEFAULT_SETTINGS: AppSettings = {
   apiKey: (import.meta as any).env?.API_KEY || (import.meta as any).env?.VITE_GEMINI_API_KEY || '',
-  model: 'models/gemini-3.8-live',
+  model: 'models/gemini-3.5-live-translate-preview',
   targetLanguageCode: 'vi',
   echoTargetLanguage: true,
   playAudioOutput: false,

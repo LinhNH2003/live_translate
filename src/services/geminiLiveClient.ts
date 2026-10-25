@@ -172,19 +172,27 @@ export class GeminiLiveClient {
           responseModalities: ['AUDIO'],
         };
 
-        if (isTranslateModel) {
+        // translationConfig được server chấp nhận cho cả model translate chuyên dụng
+        // lẫn Gemini 3.8 Live (đã probe xác nhận), giúp bám đúng ngôn ngữ đích.
+        if (isTranslateModel || isGemini38) {
           generationConfig.translationConfig = {
             targetLanguageCode: targetLang,
             echoTargetLanguage: echoTarget,
           };
         }
 
+        // Model extended-thinking bắt buộc phải khai báo thinking level,
+        // nếu không server đóng socket với mã 1007.
+        if (formattedModel.includes('extended-thinking')) {
+          generationConfig.thinkingConfig = { thinkingLevel: 'low' };
+        }
+
         const systemPrompt = buildTranslationSystemInstruction(config);
 
-        // Với Gemini 3.8 Live (hỗ trợ context lên đến 131.072 tokens):
-        // Nâng ngưỡng trigger lên 30.000 tokens và sliding window 15.000 tokens để ghi nhớ ngữ cảnh đàm thoại sâu gấp 3 lần.
-        const triggerTokens = isGemini38 ? 30000 : 10000;
-        const targetTokens = isGemini38 ? 15000 : 5000;
+        // Context Window Compression: giữ ngưỡng thấp (10k/5k) để duy trì latency thấp.
+        // Ngưỡng cao (30k/15k) làm pre-fill phình -> mỗi câu trễ hơn rõ rệt.
+        const triggerTokens = 10000;
+        const targetTokens = 5000;
 
         const setupMessage: Record<string, any> = {
           setup: {

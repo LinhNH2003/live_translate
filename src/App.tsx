@@ -435,13 +435,14 @@ export function App() {
 
           // Client-side Silence Fallback VAD:
           // Nếu âm lượng rơi xuống mức im lặng (< 0.02) trong khi đang có chữ interim,
-          // hẹn giờ 2.0s để tự động chốt câu nếu server không gửi turnComplete (giúp bảo toàn cấu trúc câu ghép).
+          // hẹn giờ 1.4s để tự động chốt câu nếu server không gửi turnComplete
+          // (đủ bảo toàn câu ghép, không giữ chữ ở dòng interim quá lâu).
           if (vol < 0.025 && interimViRef.current.trim().length > 0) {
             if (silenceTimerRef.current === null) {
               silenceTimerRef.current = window.setTimeout(() => {
                 silenceTimerRef.current = null;
                 handleTurnComplete();
-              }, 2000);
+              }, 1400);
             }
           } else if (vol >= 0.035) {
             // Người dùng tiếp tục nói -> huỷ hẹn giờ im lặng
